@@ -1,0 +1,24 @@
+.videoView {
+  display: grid;
+  gap: 12px;
+}
+
+.videoShell {
+  position: relative;
+  width: 640px;
+  height: 480px;
+}
+
+.videoShell video,
+.videoShell canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.videoShell canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}

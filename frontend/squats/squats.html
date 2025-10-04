@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Squats</title>
+
+  <link rel="stylesheet" href="squatsstyle.css">
+  <link rel="stylesheet" href="../shared/webcam.css">
+</head>
+<body>
+  <h1>Squat Exercise</h1>
+
+  <div id="squats-webcam"></div>
+
+  <script src="squatsdesign.js" type="module"></script>
+  <script src="squatsmodel.js" type="module"></script>
+
+  <script type="module">
+    import { mountWebcam } from "../shared/webcam.js";
+
+    mountWebcam("squats-webcam", {
+      onFrame: ({ ctx, canvas }) => {
+        ctx.strokeStyle = "orange";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(60, 60, 130, 130);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Plank</title>
+
+  <!-- Existing page styles -->
+  <link rel="stylesheet" href="plankstyle.css">
+
+  <!-- Shared webcam styles -->
+  <link rel="stylesheet" href="../shared/webcam.css">
+</head>
+<body>
+  <h1>Plank Exercise</h1>
+
+  <!-- Where the webcam will be mounted -->
+  <div id="plank-webcam"></div>
+
+  <!-- Existing scripts -->
+  <script src="plankdesign.js" type="module"></script>
+  <script src="plankmodel.js" type="module"></script>
+
+  <!-- Shared webcam script -->
+  <script type="module">
+    import { mountWebcam } from "../shared/webcam.js";
+
+    mountWebcam("plank-webcam", {
+      onFrame: ({ ctx, canvas }) => {
+        ctx.strokeStyle = "red";
+        ctx.strokeRect(50, 50, 100, 100);
+      }
+    });
+  </script>
+</body>
+</html>

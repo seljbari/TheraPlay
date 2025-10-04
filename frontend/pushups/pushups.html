@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Push-Ups</title>
+
+  <link rel="stylesheet" href="pushupsstyle.css">
+  <link rel="stylesheet" href="../shared/webcam.css">
+</head>
+<body>
+  <h1>Push-Up Exercise</h1>
+
+  <div id="pushups-webcam"></div>
+
+  <script src="pushupsdesign.js" type="module"></script>
+  <script src="pushupsmodel.js" type="module"></script>
+
+  <script type="module">
+    import { mountWebcam } from "../shared/webcam.js";
+
+    mountWebcam("pushups-webcam", {
+      onFrame: ({ ctx, canvas }) => {
+        ctx.strokeStyle = "blue";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(80, 80, 120, 120);
+      }
+    });
+  </script>
+</body>
+</html>
