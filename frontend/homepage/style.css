@@ -1,0 +1,204 @@
+/* ===== Base / Theme ===== */
+:root{
+  --bg: #0b1220;
+  --panel: rgba(255,255,255,0.08);
+  --panel-strong: rgba(255,255,255,0.15);
+  --text: #eaf1ff;
+  --muted: #a9b3c7;
+  --brand1: #7aa8ff;
+  --brand2: #8ef3ff;
+  --accent: #7df7b2;
+  --danger: #ff6b6b;
+  --shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(122,168,255,.25), transparent 50%),
+    radial-gradient(800px 500px at 90% 10%, rgba(142,243,255,.25), transparent 55%),
+    linear-gradient(180deg, #0b1220 0%, #0d1226 100%);
+}
+
+/* ===== Reusable ===== */
+.container{ width:min(1200px, 92%); margin:0 auto }
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:12px 18px; border-radius:12px; border:1px solid transparent;
+  font-weight:600; text-decoration:none; cursor:pointer; transition: .2s ease;
+}
+.btn.primary{ background: linear-gradient(135deg, var(--brand1), var(--brand2)); color:#08101e; box-shadow: var(--shadow) }
+.btn.primary:hover{ transform: translateY(-1px); filter: brightness(1.05) }
+.btn.ghost{ background: transparent; border-color: var(--panel-strong); color: var(--text)}
+.btn.ghost:hover{ background: var(--panel) }
+
+/* ===== Navbar ===== */
+.nav{
+  position: sticky; top:0; z-index:1000;
+  display:flex; gap:16px; align-items:center; justify-content:space-between;
+  padding:16px 24px; backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(10,16,30,.7), rgba(10,16,30,.35));
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.brand{ display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.4px; color:var(--text); text-decoration:none }
+.brand-logo{ font-size:20px }
+.nav-links{ display:flex; gap:18px }
+.nav-links a{ color:var(--muted); text-decoration:none; font-weight:600 }
+.nav-links a:hover{ color:var(--text) }
+.nav-actions{ display:flex; gap:10px; align-items:center }
+.hamburger{ display:none; background:none; border:none; cursor:pointer }
+.hamburger span{ display:block; width:22px; height:2px; background:var(--text); margin:4px 0 }
+
+/* ===== Hero ===== */
+.hero{ display:grid; grid-template-columns: 1.1fr 0.9fr; gap:40px; align-items:center; padding:56px 24px; }
+.hero-content{ padding-left: clamp(0px, 5vw, 40px) }
+.hero h1{ font-size:clamp(32px, 5vw, 56px); line-height:1.05; margin:0 0 12px }
+.gradient{ background: linear-gradient(90deg, var(--brand1), var(--accent), var(--brand2)); -webkit-background-clip:text; background-clip:text; color:transparent }
+.lead{ color:var(--muted); font-size:18px; max-width:52ch }
+.cta-row{ display:flex; gap:12px; margin-top:18px }
+.hero-badges{ display:flex; gap:10px; margin-top:16px; color:#0b1220; font-weight:700 }
+.hero-badges span{ background:#c9f8ff; padding:6px 10px; border-radius:999px; }
+.hero-mock{ display:flex; justify-content:center }
+.mock-card{ width:min(520px, 95%); border-radius:16px; box-shadow: var(--shadow) }
+.glass{ background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); backdrop-filter: blur(14px) }
+.mock-header{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.08) }
+.dot{ display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:6px }
+.red{ background:#ff8484 } .yellow{ background:#ffd36a } .green{ background:#8dfc9b }
+.mock-body{ padding:16px }
+.skeleton .line{ height:10px; background:linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.15), rgba(255,255,255,.05)); border-radius:8px; margin:8px 0 }
+.skeleton .w60{ width:60% } .skeleton .w90{ width:90% } .skeleton .w75{ width:75% }
+.hud{ display:grid; grid-template-columns: repeat(3,1fr); gap:10px; margin-top:14px }
+.hud label{ display:block; color:var(--muted); font-size:12px }
+.hud strong{ font-size:18px }
+
+/* ===== Sections ===== */
+.section{ padding:80px 24px }
+.section-title{ text-align:center; font-size:clamp(24px, 4vw, 36px); margin:0 0 26px }
+.grid{ width:min(1200px, 92%); margin:0 auto; display:grid; gap:16px }
+.cards{ grid-template-columns: repeat(4,1fr) }
+.card{ padding:18px; border-radius:16px; border:1px solid rgba(255,255,255,.12) }
+.card .icon{ font-size:28px; margin-bottom:8px }
+.card h3{ margin:8px 0 6px }
+.card p{ color:var(--muted); margin:0 }
+
+/* ===== Exercises ===== */
+.exercises{ grid-template-columns: repeat(4,1fr) }
+.exercise{
+  display:block; padding:18px; border-radius:16px; border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05); text-decoration:none; color:var(--text);
+  transition: transform .15s ease, box-shadow .15s ease; position:relative; overflow:hidden;
+}
+.exercise:hover{ transform: translateY(-3px); box-shadow: var(--shadow) }
+.exercise .badge{ font-size:28px; margin-bottom:10px }
+.exercise h3{ margin:6px 0 6px }
+.exercise p{ color:var(--muted); margin:0 }
+
+/* ===== Steps ===== */
+.steps{ width:min(900px, 92%); margin:0 auto; list-style: none; padding:0; counter-reset: step }
+.steps li{
+  counter-increment: step; margin:14px 0; padding:14px 16px; border-radius:12px;
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1)
+}
+.steps li::before{
+  content: counter(step); display:inline-grid; place-items:center; width:28px; height:28px; margin-right:10px;
+  background: linear-gradient(135deg, var(--brand1), var(--brand2)); color:#08101e; border-radius:8px; font-weight:800
+}
+
+/* ===== CTA ===== */
+.cta{ width:min(900px, 92%); margin:24px auto; text-align:center; border-radius:18px; padding:28px; border:1px solid rgba(255,255,255,.14) }
+
+/* ===== Footer ===== */
+.footer{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:20px 24px; color:var(--muted); border-top:1px solid rgba(255,255,255,.08)
+}
+.footer a{ color:var(--muted); text-decoration:none }
+.footer a:hover{ color:var(--text) }
+.footer-links{ display:flex; gap:12px }
+
+/* ===== Animations / Reveal ===== */
+.reveal{ opacity:0; transform: translateY(12px); transition: .4s ease }
+.reveal.visible{ opacity:1; transform:none }
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px){
+  .hero{ grid-template-columns: 1fr; }
+  .cards{ grid-template-columns: repeat(2,1fr) }
+  .exercises{ grid-template-columns: repeat(2,1fr) }
+}
+@media (max-width: 640px){
+  .nav-links{ display:none }
+  .hamburger{ display:inline-block }
+  .cta-row{ flex-direction:column; align-items:flex-start }
+  .cards{ grid-template-columns: 1fr }
+  .exercises{ grid-template-columns: 1fr }
+  .footer{ flex-direction:column; align-items:flex-start }
+}
+
+/* ===== Light Mode (auto) ===== */
+@media (prefers-color-scheme: light){
+  :root{
+    --bg: #f6f9ff;
+    --text: #151b26;
+    --muted: #5b677b;
+  }
+  body{ background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(122,168,255,.25), transparent 50%),
+    radial-gradient(800px 500px at 90% 10%, rgba(142,243,255,.25), transparent 55%),
+    linear-gradient(180deg, #f8fbff 0%, #f1f6ff 100%);
+  }
+}
+
+/* Manual dark class support (toggled by JS if you want) */
+.dark body{ background: #0b1220; color:#eaf1ff }
+/* ===== Exercise Image Cards ===== */
+.exercise-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  width: min(1200px, 92%);
+  margin: 0 auto;
+}
+
+.exercise-card {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.exercise-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+}
+
+.exercise-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+}
+
+.exercise-info {
+  padding: 16px;
+}
+
+.exercise-info h3 {
+  margin: 10px 0 6px;
+  font-size: 1.3rem;
+}
+
+.exercise-info p {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
