@@ -1,6 +1,6 @@
 // Main application logic
 let cameraPose = null;
-let squatAnalyzer = null;
+let sideplankAnalyzer = null;
 let lastFeedbackTime = 0;
 const FEEDBACK_INTERVAL = 3000; // Get LLM feedback every 3 seconds
 
@@ -10,8 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const videoElement = document.getElementById('webcam');
   const canvasElement = document.getElementById('output_canvas');
 
-  // Initialize squat analyzer
-  squatAnalyzer = new SquatAnalyzer();
+  // Initialize sideplank analyzer
+  sideplankAnalyzer = new SideplankAnalyzer();
 
   // Initialize camera and pose detector
   cameraPose = new CameraPoseDetector(videoElement, canvasElement, onPoseDetected);
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Called every frame when pose is detected
 function onPoseDetected(landmarks) {
   // Analyze the pose
-  const analysis = squatAnalyzer.analyzePose(landmarks);
+  const analysis = sideplankAnalyzer.analyzePose(landmarks);
   
   if (!analysis) return;
 
@@ -75,7 +75,7 @@ function showImmediateFeedback(issues) {
 
 // Get AI feedback from LLM
 async function getLLMFeedback(analysis) {
-  const prompt = squatAnalyzer.generateLLMPrompt(analysis);
+  const prompt = sideplankAnalyzer.generateLLMPrompt(analysis);
 
   try {
     updateStatus('thinking', 'AI analyzing your form...');

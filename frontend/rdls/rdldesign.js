@@ -1,6 +1,6 @@
 // Main application logic
 let cameraPose = null;
-let pushupAnalyzer = null;
+let rdlAnalyzer = null;
 let lastFeedbackTime = 0;
 const FEEDBACK_INTERVAL = 3000; // Get LLM feedback every 3 seconds
 
@@ -10,8 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const videoElement = document.getElementById('webcam');
   const canvasElement = document.getElementById('output_canvas');
 
-  // Initialize push analyzer
-  pushupAnalyzer = new PushupAnalyzer();
+  // Initialize rdl analyzer
+  rdlAnalyzer = new rdlAnalyzer();
 
   // Initialize camera and pose detector
   cameraPose = new CameraPoseDetector(videoElement, canvasElement, onPoseDetected);
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Called every frame when pose is detected
 function onPoseDetected(landmarks) {
   // Analyze the pose
-  const analysis = pushupAnalyzer.analyzePose(landmarks);
+  const analysis = rdlAnalyzer.analyzePose(landmarks);
   
   if (!analysis) return;
 
@@ -75,7 +75,7 @@ function showImmediateFeedback(issues) {
 
 // Get AI feedback from LLM
 async function getLLMFeedback(analysis) {
-  const prompt = pushupAnalyzer.generateLLMPrompt(analysis);
+  const prompt = rdlAnalyzer.generateLLMPrompt(analysis);
 
   try {
     updateStatus('thinking', 'AI analyzing your form...');
