@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Split Squat Form Check - FormCheck AI</title>
+  <link rel="stylesheet" href="../sharedstyles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="container">
+      <a href="../homepage/home.html" class="logo">← Back to Home</a>
+      <h1>Squat Form Analysis</h1>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <!-- Instructions Card -->
+    <section class="instructions-card">
+      <h2>How to Perform a Proper Squat</h2>
+      <ul>
+        <li>Stand with feet shoulder-width apart</li>
+        <li>Keep your back straight and chest up</li>
+        <li>Lower down as if sitting in a chair</li>
+        <li>Knees should track over your toes</li>
+        <li>Go down until thighs are parallel to ground</li>
+      </ul>
+    </section>
+
+    <!-- Camera Section -->
+    <section id="demos">
+      <div id="liveView" class="videoView">
+        <button id="webcamButton" class="mdc-button mdc-button--raised">
+          <span class="mdc-button__label">ENABLE WEBCAM</span>
+        </button>
+        <div style="position: relative;">
+          <video id="webcam" autoplay playsinline></video>
+          <canvas id="output_canvas" class="output_canvas"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feedback Section -->
+    <section class="feedback-section">
+      <div id="feedbackCard" class="feedback-card">
+        <div class="feedback-header">
+          <h3>AI Feedback</h3>
+          <div id="statusIndicator" class="status-indicator status-waiting">
+            <span class="status-dot"></span>
+            <span>Waiting for movement...</span>
+          </div>
+        </div>
+        <div id="feedbackContent" class="feedback-content">
+          <p class="placeholder-text">Start your squat to receive real-time feedback!</p>
+        </div>
+      </div>
+
+      <!-- Rep Counter -->
+      <div class="stats-card">
+        <div class="stat">
+          <span class="stat-label">Reps</span>
+          <span id="repCount" class="stat-value">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Form Score</span>
+          <span id="formScore" class="stat-value">-</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Scripts -->
+  <script src="../shared/camera-pose.js"></script>
+  <script src="squatsmodel.js"></script>
+  <script src="squatsdesgin.js"></script>
+</body>
+</html>

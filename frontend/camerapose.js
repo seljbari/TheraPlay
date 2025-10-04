@@ -7,50 +7,121 @@ class CameraPoseDetector {
     this.pose = null;
     this.camera = null;
     this.ctx = canvasElement.getContext('2d');
+    this.animationId = null;
   }
 
   async initialize() {
-    // Import MediaPipe Pose
-    const { Pose } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js');
-    const { Camera } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+    try {
+      // Load MediaPipe Pose scripts
+      await this.loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js');
+      await this.loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+      
+      // Initialize Pose
+      this.pose = new window.Pose({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }
+      });
 
-    // Initialize Pose
-    this.pose = new Pose({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+      this.pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      // Set up results callback
+      this.pose.onResults((results) => this.onResults(results));
+
+      return true;
+    } catch (error) {
+      console.error('Error initializing pose detector:', error);
+      throw error;
+    }
+  }
+
+  loadScript(src) {
+    return new Promise((resolve, reject) => {
+      // Check if script already loaded
+      if (document.querySelector(`script[src="${src}"]`)) {
+        resolve();
+        return;
       }
-    });
 
-    this.pose.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    // Set up results callback
-    this.pose.onResults((results) => this.onResults(results));
-
-    // Start camera
-    this.camera = new Camera(this.video, {
-      onFrame: async () => {
-        await this.pose.send({ image: this.video });
-      },
-      width: 640,
-      height: 480
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
     });
   }
 
   async start() {
-    if (!this.camera) {
-      await this.initialize();
+    try {
+      if (!this.pose) {
+        await this.initialize();
+      }
+
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: 640,
+          height: 480,
+          facingMode: 'user'
+        }
+      });
+
+      this.video.srcObject = stream;
+      
+      // Wait for video to be ready
+      await new Promise((resolve) => {
+        this.video.onloadedmetadata = () => {
+          this.video.play();
+          resolve();
+        };
+      });
+
+      // Set canvas size to match video
+      this.canvas.width = this.video.videoWidth;
+      this.canvas.height = this.video.videoHeight;
+
+      // Start processing frames
+      this.processFrame();
+
+      return true;
+    } catch (error) {
+      console.error('Error starting camera:', error);
+      throw error;
     }
-    await this.camera.start();
+  }
+
+  async processFrame() {
+    if (!this.video || this.video.paused || this.video.ended) {
+      return;
+    }
+
+    try {
+      await this.pose.send({ image: this.video });
+    } catch (error) {
+      console.error('Error processing frame:', error);
+    }
+
+    // Continue processing
+    this.animationId = requestAnimationFrame(() => this.processFrame());
   }
 
   stop() {
-    if (this.camera) {
-      this.camera.stop();
+    // Stop animation loop
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+
+    // Stop video stream
+    if (this.video && this.video.srcObject) {
+      const tracks = this.video.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+      this.video.srcObject = null;
     }
   }
 
@@ -94,24 +165,28 @@ class CameraPoseDetector {
       const startPoint = landmarks[start];
       const endPoint = landmarks[end];
       
-      this.ctx.beginPath();
-      this.ctx.moveTo(startPoint.x * this.canvas.width, startPoint.y * this.canvas.height);
-      this.ctx.lineTo(endPoint.x * this.canvas.width, endPoint.y * this.canvas.height);
-      this.ctx.stroke();
+      if (startPoint && endPoint) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(startPoint.x * this.canvas.width, startPoint.y * this.canvas.height);
+        this.ctx.lineTo(endPoint.x * this.canvas.width, endPoint.y * this.canvas.height);
+        this.ctx.stroke();
+      }
     });
 
     // Draw key points
     this.ctx.fillStyle = '#FF0000';
     landmarks.forEach((landmark) => {
-      this.ctx.beginPath();
-      this.ctx.arc(
-        landmark.x * this.canvas.width,
-        landmark.y * this.canvas.height,
-        5,
-        0,
-        2 * Math.PI
-      );
-      this.ctx.fill();
+      if (landmark) {
+        this.ctx.beginPath();
+        this.ctx.arc(
+          landmark.x * this.canvas.width,
+          landmark.y * this.canvas.height,
+          5,
+          0,
+          2 * Math.PI
+        );
+        this.ctx.fill();
+      }
     });
   }
 
