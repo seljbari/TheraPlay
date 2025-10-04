@@ -1,0 +1,347 @@
+import React, { useState } from 'react';
+import { Camera, CheckCircle, AlertCircle, TrendingUp, Zap, Shield, Video } from 'lucide-react';
+
+export default function FormCheckHomepage() {
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-2">
+              <Camera className="text-white" size={24} />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              FormCheck AI
+            </h1>
+          </div>
+          <nav className="hidden md:flex gap-6">
+            <a href="#how-it-works" className="text-gray-600 hover:text-blue-600 font-medium">
+              How It Works
+            </a>
+            <a href="#exercises" className="text-gray-600 hover:text-blue-600 font-medium">
+              Exercises
+            </a>
+            <a href="#pricing" className="text-gray-600 hover:text-blue-600 font-medium">
+              Pricing
+            </a>
+          </nav>
+          <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
+            Try Now
+          </button>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div>
+            <div className="inline-block bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium mb-6">
+              ✨ AI-Powered Form Analysis
+            </div>
+            
+            <h2 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+              Perfect Your Exercise Form in Real-Time
+            </h2>
+            
+            <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+              Get instant AI coaching on your posture and technique. Prevent injuries, maximize gains, and work out smarter with live feedback.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 mb-8">
+              <button className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-8 py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2">
+                <Camera size={24} />
+                Start Free Session
+              </button>
+              
+              <button className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 text-lg font-semibold px-8 py-4 rounded-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2">
+                <Video size={24} />
+                Watch Demo
+              </button>
+            </div>
+
+            <div className="flex items-center gap-8 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="text-green-500" size={20} />
+                <span>No app download</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="text-green-500" size={20} />
+                <span>Works on any device</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="text-green-500" size={20} />
+                <span>Free to start</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Demo Video Placeholder */}
+          <div className="relative">
+            <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-1 shadow-2xl">
+              <div className="bg-gray-900 rounded-xl aspect-[4/3] flex items-center justify-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20"></div>
+                <div className="relative z-10 text-center p-8">
+                  <Camera className="text-white mx-auto mb-4" size={64} />
+                  <p className="text-white text-xl font-semibold mb-2">Live Camera Feed</p>
+                  <p className="text-white/80">Real-time posture analysis</p>
+                </div>
+                
+                {/* Mock feedback overlay */}
+                <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg p-4 shadow-lg">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="text-green-500 flex-shrink-0 mt-1" size={24} />
+                    <div>
+                      <p className="font-semibold text-gray-900 mb-1">Great form! 💪</p>
+                      <p className="text-sm text-gray-600">Keep your back straight and core engaged. Perfect squat depth!</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="bg-gray-50 py-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 text-center">
+            <div>
+              <div className="text-4xl font-bold text-blue-600 mb-2">85%</div>
+              <p className="text-gray-600">Injury Prevention</p>
+            </div>
+            <div>
+              <div className="text-4xl font-bold text-blue-600 mb-2">10k+</div>
+              <p className="text-gray-600">Users Training Daily</p>
+            </div>
+            <div>
+              <div className="text-4xl font-bold text-blue-600 mb-2">50+</div>
+              <p className="text-gray-600">Exercises Supported</p>
+            </div>
+            <div>
+              <div className="text-4xl font-bold text-blue-600 mb-2">4.9★</div>
+              <p className="text-gray-600">User Rating</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section id="how-it-works" className="container mx-auto px-4 py-20">
+        <div className="text-center mb-16">
+          <h3 className="text-4xl font-bold text-gray-900 mb-4">How It Works</h3>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Advanced AI analyzes your form in real-time and provides instant coaching feedback
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="text-center">
+            <div className="bg-blue-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+              <Camera className="text-blue-600" size={36} />
+            </div>
+            <h4 className="text-2xl font-bold text-gray-900 mb-3">1. Position Yourself</h4>
+            <p className="text-gray-600 text-lg">
+              Stand in front of your device camera. No special equipment needed - just you and your phone!
+            </p>
+          </div>
+
+          <div className="text-center">
+            <div className="bg-purple-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+              <Zap className="text-purple-600" size={36} />
+            </div>
+            <h4 className="text-2xl font-bold text-gray-900 mb-3">2. AI Analyzes Form</h4>
+            <p className="text-gray-600 text-lg">
+              Our computer vision tracks your joints and posture, analyzing every angle in real-time.
+            </p>
+          </div>
+
+          <div className="text-center">
+            <div className="bg-green-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="text-green-600" size={36} />
+            </div>
+            <h4 className="text-2xl font-bold text-gray-900 mb-3">3. Get Instant Feedback</h4>
+            <p className="text-gray-600 text-lg">
+              Receive clear, actionable coaching on what to improve and what you're doing well.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="bg-gradient-to-b from-gray-50 to-white py-20">
+        <div className="container mx-auto px-4">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <h3 className="text-4xl font-bold text-gray-900 mb-6">
+                Real-Time Coaching That Actually Works
+              </h3>
+              
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="bg-blue-100 rounded-lg p-3 h-fit">
+                    <Shield className="text-blue-600" size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">Injury Prevention</h4>
+                    <p className="text-gray-600">
+                      Catch form mistakes before they cause injuries. Get warnings about dangerous positions.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="bg-purple-100 rounded-lg p-3 h-fit">
+                    <TrendingUp className="text-purple-600" size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">Track Progress</h4>
+                    <p className="text-gray-600">
+                      See your form improve over time with detailed analytics and progress charts.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="bg-green-100 rounded-lg p-3 h-fit">
+                    <Zap className="text-green-600" size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">Natural Language AI</h4>
+                    <p className="text-gray-600">
+                      Get coaching that feels human. Clear explanations, not technical jargon.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-100 rounded-2xl p-8 shadow-xl">
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg p-4 border-l-4 border-green-500">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="text-green-500 flex-shrink-0 mt-1" size={20} />
+                    <div>
+                      <p className="font-semibold text-gray-900">Excellent depth!</p>
+                      <p className="text-sm text-gray-600">Your hips are going below parallel. Perfect squat form.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border-l-4 border-yellow-500">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="text-yellow-500 flex-shrink-0 mt-1" size={20} />
+                    <div>
+                      <p className="font-semibold text-gray-900">Watch your knees</p>
+                      <p className="text-sm text-gray-600">Try to keep your knees aligned with your toes. Push them outward slightly.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border-l-4 border-green-500">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="text-green-500 flex-shrink-0 mt-1" size={20} />
+                    <div>
+                      <p className="font-semibold text-gray-900">Great back position!</p>
+                      <p className="text-sm text-gray-600">Your spine is neutral. Keep your chest up like this.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-center text-gray-500 text-sm mt-6">
+                💬 Real-time feedback examples
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Exercises */}
+      <section id="exercises" className="container mx-auto px-4 py-20">
+        <div className="text-center mb-12">
+          <h3 className="text-4xl font-bold text-gray-900 mb-4">Supported Exercises</h3>
+          <p className="text-xl text-gray-600">Perfect form on the exercises that matter most</p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {['Squats', 'Push-ups', 'Deadlifts', 'Planks', 'Lunges', 'Shoulder Press', 'Rows', 'Pull-ups'].map((exercise) => (
+            <div key={exercise} className="bg-white border-2 border-gray-200 hover:border-blue-500 rounded-xl p-6 text-center cursor-pointer transition-all hover:shadow-lg">
+              <div className="text-4xl mb-3">💪</div>
+              <p className="font-semibold text-gray-900">{exercise}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="bg-gradient-to-r from-blue-600 to-purple-600 py-20">
+        <div className="container mx-auto px-4 text-center">
+          <h3 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            Start Training Smarter Today
+          </h3>
+          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+            Join thousands of athletes and fitness enthusiasts improving their form with AI
+          </p>
+          <button className="bg-white text-blue-600 hover:bg-gray-100 text-xl font-bold px-10 py-5 rounded-lg shadow-2xl transform hover:scale-105 transition-all">
+            Try FormCheck Free →
+          </button>
+          <p className="mt-4 text-white/80">No credit card • No download • Start in 30 seconds</p>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-2">
+                  <Camera className="text-white" size={20} />
+                </div>
+                <h4 className="text-lg font-bold">FormCheck AI</h4>
+              </div>
+              <p className="text-gray-400 text-sm">
+                AI-powered form correction for better, safer workouts.
+              </p>
+            </div>
+
+            <div>
+              <h5 className="font-bold mb-4">Product</h5>
+              <ul className="space-y-2 text-gray-400 text-sm">
+                <li><a href="#" className="hover:text-white">Features</a></li>
+                <li><a href="#" className="hover:text-white">Exercises</a></li>
+                <li><a href="#" className="hover:text-white">Pricing</a></li>
+                <li><a href="#" className="hover:text-white">API</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h5 className="font-bold mb-4">Company</h5>
+              <ul className="space-y-2 text-gray-400 text-sm">
+                <li><a href="#" className="hover:text-white">About</a></li>
+                <li><a href="#" className="hover:text-white">Blog</a></li>
+                <li><a href="#" className="hover:text-white">Careers</a></li>
+                <li><a href="#" className="hover:text-white">Contact</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h5 className="font-bold mb-4">Legal</h5>
+              <ul className="space-y-2 text-gray-400 text-sm">
+                <li><a href="#" className="hover:text-white">Privacy</a></li>
+                <li><a href="#" className="hover:text-white">Terms</a></li>
+                <li><a href="#" className="hover:text-white">Security</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">
+            <p>&copy; 2025 FormCheck AI. Built for athletes, by athletes.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
