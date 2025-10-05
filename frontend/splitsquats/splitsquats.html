@@ -2,29 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Split Squats</title>
-
-  <link rel="stylesheet" href="splitsquatsstyle.css">
-  <link rel="stylesheet" href="../shared/webcam.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Split Squat Form Check - FormCheck AI</title>
+  <link rel="stylesheet" href="../sharedstyles.css">
 </head>
 <body>
-  <h1>Split-Squat Exercise</h1>
+  <!-- Header -->
+  <header>
+    <div class="container">
+      <a href="../homepage/home.html" class="logo">← Back to Home</a>
+      <h1>Split Squat Form Analysis</h1>
+    </div>
+  </header>
 
-  <div id="splitsquats-webcam"></div>
+  <!-- Main Content -->
+  <main class="container">
+    <!-- Instructions Card -->
+    <section class="instructions-card">
+      <h2>How to Perform a Proper Split Squat</h2>
+      <ul>
+        <li>Start with your feet hip-width apart</li>
+        <li>Keep your back straight and lower your left knee (back leg) toward the floor</li>
+        <li>Before the left knee (back leg) touches the floor, press down on your right foot to pull back on the right knee</li>
+        <li>Push the top of your left foot into the bench and return to the starting position</li>
+      </ul>
+    </section>
 
-  <script src="splitsquatsdesign.js" type="module"></script>
-  <script src="splitsquatsmodel.js" type="module"></script>
+    <!-- Camera Section -->
+    <section id="demos">
+      <div id="liveView" class="videoView">
+        <button id="webcamButton" class="mdc-button mdc-button--raised">
+          <span class="mdc-button__label">ENABLE WEBCAM</span>
+        </button>
+        <div style="position: relative;">
+          <video id="webcam" autoplay playsinline></video>
+          <canvas id="output_canvas" class="output_canvas"></canvas>
+        </div>
+      </div>
+    </section>
 
-  <script type="module">
-    import { mountWebcam } from "../shared/webcam.js";
+    <!-- Feedback Section -->
+    <section class="feedback-section">
+      <div id="feedbackCard" class="feedback-card">
+        <div class="feedback-header">
+          <h3>AI Feedback</h3>
+          <div id="statusIndicator" class="status-indicator status-waiting">
+            <span class="status-dot"></span>
+            <span>Waiting for movement...</span>
+          </div>
+        </div>
+        <div id="feedbackContent" class="feedback-content">
+          <p class="placeholder-text">Start your split squat to receive real-time feedback!</p>
+        </div>
+      </div>
 
-    mountWebcam("splitsquats-webcam", {
-      onFrame: ({ ctx, canvas }) => {
-        ctx.strokeStyle = "green";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(40, 40, 150, 150);
-      }
-    });
-  </script>
+      <!-- Rep Counter -->
+      <div class="stats-card">
+        <div class="stat">
+          <span class="stat-label">Reps</span>
+          <span id="repCount" class="stat-value">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Form Score</span>
+          <span id="formScore" class="stat-value">-</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Scripts -->
+  <script src="../camera-pose.js"></script>
+  <script src="splitsquatsmodel.js"></script>
+  <script src="splitsquatsdesgin.js"></script>
 </body>
 </html>

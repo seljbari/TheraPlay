@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TheraPlay – Flappy Face‑Down/Up (Front‑View)</title>
+  <style>
+    :root {
+      --sky: #b3e5fc;
+      --ground: #8bc34a;
+      --pipe: #4caf50;
+      --pipe-dark: #2e7d32;
+      --bird: #ffca28;
+      --ui: #263238;
+      --ui-contrast: #ffffff;
+      --accent: #7c4dff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(180deg, var(--sky) 70%, var(--ground) 70%);
+      display: grid; place-items: center;
+    }
+
+    .game-shell { width: min(92vw, 900px); aspect-ratio: 16/9; position: relative; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.2); background: linear-gradient(180deg, var(--sky) 70%, var(--ground) 70%); border: 6px solid rgba(0,0,0,0.05); }
+    canvas { width: 100%; height: 100%; display:block; }
+
+    .hud { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-rows: auto 1fr auto; padding: 12px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap: 8px; pointer-events: auto; }
+
+    .pill { background: rgba(0,0,0,.45); color: var(--ui-contrast); padding: 8px 12px; border-radius: 999px; font-weight: 700; letter-spacing:.3px; font-size: 14px; display:flex; align-items:center; gap: 8px; backdrop-filter: blur(6px); }
+    .controls { display:flex; align-items:center; gap:8px; }
+
+    button { pointer-events: auto; background: var(--accent); color: white; font-weight: 800; border: none; padding: 10px 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(124,77,255,.35); transition: transform .06s ease; }
+    button:active { transform: translateY(1px); }
+
+    .notice { justify-self:center; align-self:center; pointer-events:none; text-align:center; color: var(--ui); }
+    .notice h1 { margin: 0 0 10px; font-size: clamp(20px, 4vw, 36px); }
+    .notice p { margin: 0; font-size: clamp(14px, 2.2vw, 18px); opacity:.9 }
+
+    .footer { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+
+    .debug-panel { pointer-events:auto; background: rgba(255,255,255,.85); border-radius: 12px; padding:8px 12px; font-size: 12px; color:#333; }
+    .meter { height: 8px; background:#e0e0e0; border-radius:6px; overflow:hidden; }
+    .meter > span { display:block; height:100%; background: #ff7043; width:0%; transition: width .08s linear; }
+
+    video { position: absolute; bottom: 10px; right: 10px; width: 220px; border-radius: 8px; border: 2px solid white; }
+  </style>
+</head>
+<body>
+  <div class="game-shell" id="flappy-face">
+    <canvas id="game"></canvas>
+    <div class="hud">
+      <div class="topbar">
+        <div class="pill">🎮 Flappy Face — move your head up/down to steer • obstacles follow a push‑up rhythm</div>
+        <div class="controls">
+          <button id="startBtn">Start</button>
+          <button id="pauseBtn">Pause</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </div>
+      <div class="notice" id="notice">
+        <h1>🧒 TheraPlay: Flappy Face (Front‑View)</h1>
+        <p>Place the camera in front of the player. Keep face & upper body in view.<br><b>Down then Up</b> (like a push‑up motion) = one flap. Slower pacing by design.</p>
+      </div>
+      <div class="footer">
+        <div class="pill">Score: <span id="score">0</span></div>
+        <div class="debug-panel">
+          <div>🙂 Nose rel‑height: <span id="noseVal">0.00</span> (baseline <span id="baseVal">0.00</span>)</div>
+          <div>⬇️ Down detect: relNose &gt; baseline + <span id="downDelta">0.12</span></div>
+          <div>⬆️ Up detect: relNose &lt; baseline + <span id="upDelta">0.02</span></div>
+          <div>⏱ Hold‑down: <span id="holdMs">0</span>/<span id="needHold">1200</span> ms • Cooldown: <span id="cdLeft">0</span> ms</div>
+          <div class="meter" aria-hidden="true"><span id="pushMeter"></span></div>
+          <label style="display:inline-flex; align-items:center; gap:6px; margin-top:6px;">
+            <input type="checkbox" id="kbMode" /> Keyboard mode
+          </label>
+        </div>
+      </div>
+    </div>
+    <video id="input_video" playsinline></video>
+  </div>
+
+  <!-- MediaPipe (Pose + camera utils) via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+  <script>
+    (function initFlappyFaceUpDown() {
+      const cnv = document.getElementById('game');
+      const ctx = cnv.getContext('2d');
+      const shell = document.getElementById('flappy-face');
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+      function resize() {
+        const { width, height } = shell.getBoundingClientRect();
+        cnv.width = Math.floor(width * dpr);
+        cnv.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      new ResizeObserver(resize).observe(shell);
+      resize();
+
+      const state = {
+        running:false, paused:false, dead:false,
+        score:0, time:0,
+        bird:{x:120,y:220,r:18,vy:0},
+        gravity:0.42, flapVy:-6.8,
+        pipes:[], pipeGap:200, pipeW:70, pipeSpeed:2.6,
+        spawnEach:3400, pipePhase:0, pipeAmp:0.24, pipeStep:1.57, lastSpawn:0
+      };
+
+      const scoreEl=document.getElementById('score');
+      const notice=document.getElementById('notice');
+      const kbMode=document.getElementById('kbMode');
+
+      document.getElementById('startBtn').addEventListener('click',start);
+      document.getElementById('pauseBtn').addEventListener('click',()=>state.paused=!state.paused);
+      document.getElementById('resetBtn').addEventListener('click',reset);
+      window.addEventListener('keydown',(e)=>{if(!state.running||state.paused)return;if(kbMode.checked&&(e.code==='Space'||e.code==='ArrowUp'))flap();});
+
+      function start(){
+        if(!state.running){state.running=true;state.paused=false;state.dead=false;notice.style.display='none';state.lastSpawn=performance.now();prewarmPipes();}
+        else if(state.dead){reset();state.running=true;state.paused=false;state.dead=false;notice.style.display='none';}
+        else {state.paused=false;}
+      }
+      function reset(){state.score=0;state.time=0;state.dead=false;state.paused=false;state.bird.x=120;state.bird.y=cnv.height/2;state.bird.vy=0;state.pipes=[];prewarmPipes();state.lastSpawn=performance.now();notice.style.display='';}
+      function flap(){state.bird.vy=state.flapVy;}
+
+      function spawnPipe(xOverride){
+        // Push-up patterned gaps: oscillate between high and low like reps
+        const h = cnv.height;
+        const mid = h * 0.5;
+        const amp = h * (state.pipeAmp || 0.24);
+        const gapCenter = mid + amp * Math.sin(state.pipePhase || 0);
+        state.pipePhase = (state.pipePhase || 0) + (state.pipeStep || 1.57);
+        const margin = 60;
+        const clamped = Math.max(margin + state.pipeGap/2, Math.min(h - margin - state.pipeGap/2, gapCenter));
+        state.pipes.push({ x: (xOverride ?? (cnv.width + 40)), gapY: clamped });
+      }
+      function prewarmPipes(){
+        // Fill initial screen so the bird meets pipes immediately
+        state.pipes = [];
+        const xs = [cnv.width*0.55, cnv.width*0.85, cnv.width*1.15];
+        xs.forEach(x => spawnPipe(x));
+      }
+      function hitTest(){const b=state.bird;if(b.y+b.r>cnv.height||b.y-b.r<0)return true;for(const p of state.pipes){const withinX=b.x+b.r>p.x&&b.x-b.r<p.x+state.pipeW;if(!withinX)continue;const topH=p.gapY-state.pipeGap/2;const bottomY=p.gapY+state.pipeGap/2;if(b.y-b.r<topH||b.y+b.r>bottomY)return true;}return false;}
+
+      function drawBackground(){const w=cnv.width/dpr,h=cnv.height/dpr;const sky=ctx.createLinearGradient(0,0,0,h*.7);sky.addColorStop(0,'#b3e5fc');sky.addColorStop(1,'#81d4fa');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h*.7);ctx.fillStyle='#8bc34a';ctx.fillRect(0,h*.7,w,h*.3);ctx.globalAlpha=.6;ctx.fillStyle='white';const t=state.time*.02;for(let i=0;i<6;i++){const cx=(w-(t*(20+i*3))%(w+200))-100;const cy=30+(i%3)*25;ctx.beginPath();ctx.arc(cx,cy,20,0,Math.PI*2);ctx.arc(cx+18,cy+6,16,0,Math.PI*2);ctx.arc(cx-18,cy+6,16,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
+      function drawBird(){const b=state.bird;ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bird')||'#ffca28';ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#263238';ctx.beginPath();ctx.arc(b.x+6,b.y-6,3,0,Math.PI*2);ctx.fill();ctx.save();ctx.translate(b.x-8,b.y+4);ctx.rotate(Math.max(-0.8,Math.min(0.8,-b.vy*0.08)));ctx.fillStyle='#f9a825';ctx.beginPath();ctx.ellipse(0,0,10,6,0,0,Math.PI*2);ctx.fill();ctx.restore();ctx.fillStyle='#fb8c00';ctx.beginPath();ctx.moveTo(b.x+b.r,b.y);ctx.lineTo(b.x+b.r+12,b.y-4);ctx.lineTo(b.x+b.r+12,b.y+4);ctx.closePath();ctx.fill();}
+      function drawPipes(){ctx.fillStyle='#4caf50';ctx.strokeStyle='#2e7d32';ctx.lineWidth=3;for(const p of state.pipes){const topH=p.gapY-state.pipeGap/2;const bottomY=p.gapY+state.pipeGap/2;ctx.beginPath();ctx.rect(p.x,0,state.pipeW,topH);ctx.fill();ctx.stroke();ctx.beginPath();ctx.rect(p.x,bottomY,state.pipeW,cnv.height-bottomY);ctx.fill();ctx.stroke();}}
+
+      let last=performance.now();function loop(ts){requestAnimationFrame(loop);const dt=Math.min(32,ts-last);last=ts;state.time+=dt;if(!state.running||state.paused){drawBackground();drawPipes();drawBird();return;}if(ts-state.lastSpawn>state.spawnEach){spawnPipe();state.lastSpawn=ts;}for(const p of state.pipes){p.x-=state.pipeSpeed;}while(state.pipes.length&&state.pipes[0].x+state.pipeW<0){state.pipes.shift();state.score++;scoreEl.textContent=state.score;}if (headTargetY != null) { // super-slow follow of head target
+        state.bird.y += (headTargetY - state.bird.y) * 0.06; // smoothing toward target
+      } else {
+        state.bird.vy += state.gravity; state.bird.y += state.bird.vy; // fallback if no camera
+      }if(hitTest()){state.dead=true;state.running=false;notice.style.display='';notice.innerHTML=`<h1>💥 Oops! Try Again</h1><p>Your score: <b>${state.score}</b>. Move your face/torso down then up to flap. Click Start to retry!</p>`;}drawBackground();drawPipes();drawBird();}
+      requestAnimationFrame(loop);
+
+      // =======================
+      // MediaPipe Pose (continuous head-follow control)
+      // =======================
+      const videoEl=document.getElementById('input_video');
+      const noseValEl=document.getElementById('noseVal');
+      const baseValEl=document.getElementById('baseVal');
+      const downDeltaEl=document.getElementById('downDelta');
+      const upDeltaEl=document.getElementById('upDelta');
+      const holdMsEl=document.getElementById('holdMs');
+      const needHoldEl=document.getElementById('needHold');
+      const cdLeftEl=document.getElementById('cdLeft');
+      const meterEl=document.getElementById('pushMeter');
+
+      const DEADZONE = 0.02;       // ignore tiny jitters around baseline
+      const CURVE_GAIN = 3.0;     // stronger curve toward top/bottom (push-up feel)
+      const RANGE_GAIN = 0.36;    // overall travel range (~0.5 ± 0.36 = 0.14..0.86)
+      function pushupMap(delta){
+        // Remove deadzone
+        const sign = Math.sign(delta);
+        let x = Math.abs(delta) <= DEADZONE ? 0 : (Math.abs(delta) - DEADZONE) * sign;
+        // Nonlinear squash: emphasize ends like a push-up bottom/top
+        const y = Math.tanh(x * CURVE_GAIN); // in [-1,1]
+        // Map to normalized screen Y (0..1), center at 0.5
+        let yNorm = 0.5 + y * RANGE_GAIN;
+        // Clamp safe zone
+        return Math.max(0.08, Math.min(0.92, yNorm));
+      }
+
+      let camera=null;
+      let baselineRelNose=null; // EMA baseline of nose height
+      let headTargetY=null; // pixel Y target for the bird
+      let lastDelta=0;      // for direction smoothing
+      let phase='idle';     // 'down' or 'up' (for future use) 
+
+      function avg(a,b){return(a+b)/2;}
+      function dist(a,b){const dx=a.x-b.x,dy=a.y-b.y;return Math.hypot(dx,dy);}
+      function ema(prev,value,a=0.05){return prev==null?value:prev*(1-a)+value*a;}
+
+      function onResults(results){
+        if(!results.poseLandmarks) return;
+        const lm = results.poseLandmarks;
+        const nose = lm[0];
+        const L = { shoulder: lm[11], hip: lm[23] };
+        const R = { shoulder: lm[12], hip: lm[24] };
+
+        // Normalize nose Y by torso length to handle camera distance/scale
+        const shoulderY = avg(L.shoulder.y, R.shoulder.y);
+        const hipY = avg(L.hip.y, R.hip.y);
+        const torsoLen = Math.max(0.001, avg(dist(L.shoulder,L.hip), dist(R.shoulder,R.hip)));
+        const relNose = (nose.y - hipY) / torsoLen; // larger => lower (closer to ground)
+
+        baselineRelNose = ema(baselineRelNose, relNose, 0.02);
+
+        // UI
+        noseValEl.textContent = relNose.toFixed(2);
+        baseValEl.textContent = (baselineRelNose??0).toFixed(2);
+        const depth = Math.max(0, Math.min(1, (relNose - (baselineRelNose||relNose)) / 0.25));
+        meterEl.style.width = (depth*100).toFixed(0)+'%';
+
+        // Map head height to canvas Y directly
+        // relNose larger => head lower => move bird down
+        const delta = (relNose - (baselineRelNose ?? relNose));
+        // Determine direction (down = positive delta => head lower)
+        phase = delta >= 0 ? 'down' : 'up';
+        const yNorm = pushupMap(delta); // push-up style mapping
+        headTargetY = yNorm * cnv.height;
+      }
+
+      async function initPose(){
+        const pose=new Pose({ locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+        pose.onResults(onResults);
+        camera=new Camera(videoEl,{ onFrame:async()=>{ await pose.send({ image: videoEl }); }, width: 640, height: 360 });
+        try{ await camera.start(); }
+        catch(e){ console.warn('Camera start failed:', e); kbMode.checked=true; const hint=document.createElement('p'); hint.style.marginTop='8px'; hint.style.color='#d32f2f'; hint.textContent='Camera unavailable – using keyboard mode (Space/↑)'; notice.appendChild(hint); }
+      }
+
+      initPose();
+      state.bird.y = cnv.height/2;
+    })();
+  </script>
+</body>
+</html>
