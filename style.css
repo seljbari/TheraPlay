@@ -1,0 +1,229 @@
+body {
+    margin: 0;
+    padding: 20px;
+    background-color: #1a1a1a;
+    color: white;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.game-selector {
+    text-align: center;
+}
+
+.game-selector h1 {
+    font-size: 2em;
+    margin-bottom: 30px;
+}
+
+.button-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 40px;
+    max-width: 6px;
+}
+
+.game-button {
+    border: 10px solid #333;
+    background: transparent;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.game-button:hover {
+    transform: scale(1.05);
+}
+
+.game-button img {
+    width: 200px;
+    height: auto;
+    display: block;
+}
+
+.game-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#gameCanvas {
+    border: 2px solid #333;
+    background: black;
+    position: relative;
+}
+
+.game-controls {
+    margin-top: 20px;
+    display: flex;
+    gap: 20px;
+}
+
+.game-controls button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background: #333;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+.game-controls button:hover {
+    background: #555;
+}
+
+.game-controls button:active {
+    background: #666;
+}
+
+#score-display {
+    position: absolute;
+    bottom: 70px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 300px;
+    font-size: 3em;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+#score-display span {
+    color: #b971dd !important;  /* Set to exact purple of your background */
+    text-shadow: none !important;
+}
+#score-display {
+  visibility: hidden !important;
+}
+
+
+.game-over-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 50px;
+    text-align: center;
+    border-radius: 10px;
+    z-index: 10;
+}
+
+.game-over-overlay h2 {
+    font-size: 4em;
+    color: #ff6b6b;
+    margin-bottom: 20px;
+}
+
+.final-score {
+    font-size: 2.5em;
+    color: #c800c8;
+    margin-bottom: 30px;
+}
+
+.status-overlay {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 18px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.pose-detected {
+    color: #4CAF50;
+    border-left: 4px solid #4CAF50;
+}
+
+.pose-not-detected {
+    color: #ff6b6b;
+    border-left: 4px solid #ff6b6b;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+    #gameCanvas {
+        transform: scale(0.8);
+        transform-origin: top center;
+    }
+    
+    .game-container {
+        margin-top: -50px;
+    }
+}
+
+@media (max-width: 1100px) {
+    #gameCanvas {
+        transform: scale(0.6);
+        transform-origin: top center;
+    }
+    
+    .game-container {
+        margin-top: -100px;
+    }
+    
+    .button-grid {
+        grid-template-columns: 1fr;
+        max-width: 3px;
+    }
+}
+
+/* Animation for score updates */
+@keyframes scoreUpdate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.score-update {
+    animation: scoreUpdate 0.3s ease-in-out;
+}
+
+/* Loading indicator styles */
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    color: #4CAF50;
+}
+
+.loading::after {
+    content: '...';
+    animation: dots 1.5s steps(5, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% {
+        color: rgba(0,0,0,0);
+        text-shadow:
+            .25em 0 0 rgba(0,0,0,0),
+            .5em 0 0 rgba(0,0,0,0);
+    }
+    40% {
+        color: #4CAF50;
+        text-shadow:
+            .25em 0 0 rgba(0,0,0,0),
+            .5em 0 0 rgba(0,0,0,0);
+    }
+    60% {
+        text-shadow:
+            .25em 0 0 #4CAF50,
+            .5em 0 0 rgba(0,0,0,0);
+    }
+    80%, 100% {
+        text-shadow:
+            .25em 0 0 #4CAF50,
+            .5em 0 0 #4CAF50;
+    }
+}
