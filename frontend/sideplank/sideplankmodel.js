@@ -209,6 +209,13 @@ async function predictWebcam() {
   }
 }
 
+// Side plank tracking variables
+let isHoldingPlank = false;
+let holdStartTime = null;
+let totalHoldTime = 0;
+let lastPlankSide = null;
+const targetInput = document.getElementById("targetTime");
+
 function processAndDisplayPose(landmarks) {
   const leftShoulder = landmarks[11];
   const rightShoulder = landmarks[12];
@@ -223,40 +230,30 @@ function processAndDisplayPose(landmarks) {
   const leftAnkle = landmarks[27];
   const rightAnkle = landmarks[28];
 
-  let isSidePlank = false;
-  let statusText = "";
-
-  // Calculate elbow angles (should be extended or at 90° depending on variant)
+  // Calculate angles
   const leftElbowAngle = getAngle(leftShoulder, leftElbow, leftWrist);
   const rightElbowAngle = getAngle(rightShoulder, rightElbow, rightWrist);
-
-  // Calculate body alignment angles (shoulder-hip-ankle should be straight ~160-200°)
+  
   const leftBodyAngle = getAngle(leftShoulder, leftHip, leftAnkle);
   const rightBodyAngle = getAngle(rightShoulder, rightHip, rightAnkle);
-
-  // Calculate hip angles (hip should be extended, not bent)
+  
   const leftHipAngle = getAngle(leftShoulder, leftHip, leftKnee);
   const rightHipAngle = getAngle(rightShoulder, rightHip, rightKnee);
-
-  // Calculate knee angles (should be straight for standard side plank)
+  
   const leftKneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
   const rightKneeAngle = getAngle(rightHip, rightKnee, rightAnkle);
 
   // Draw angle arcs
   drawAngleArc(leftShoulder, leftElbow, leftWrist, leftElbowAngle, "cyan");
   drawAngleArc(rightShoulder, rightElbow, rightWrist, rightElbowAngle, "cyan");
-
   drawAngleArc(leftShoulder, leftHip, leftAnkle, leftBodyAngle, "yellow");
   drawAngleArc(rightShoulder, rightHip, rightAnkle, rightBodyAngle, "yellow");
-
   drawAngleArc(leftShoulder, leftHip, leftKnee, leftHipAngle, "magenta");
   drawAngleArc(rightShoulder, rightHip, rightKnee, rightHipAngle, "magenta");
-
   drawAngleArc(leftHip, leftKnee, leftAnkle, leftKneeAngle, "orange");
   drawAngleArc(rightHip, rightKnee, rightAnkle, rightKneeAngle, "orange");
 
   // Determine which side is down (supporting arm)
-  // In a side plank, one arm is down and the other is either up or on the hip
   const leftArmLower = leftElbow.y > rightElbow.y;
   const rightArmLower = rightElbow.y > leftElbow.y;
 
@@ -283,21 +280,352 @@ function processAndDisplayPose(landmarks) {
   const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
   const kneesStright = avgKneeAngle > 160;
 
-  if (bodyAligned && (forearmPlank || straightArmPlank) && kneesStright) {
-    isSidePlank = true;
+  const isSidePlank = bodyAligned && (forearmPlank || straightArmPlank) && kneesStright;
+  
+  let statusText = "";
+  
+  if (isSidePlank) {
     const plankType = forearmPlank ? "FOREARM" : "STRAIGHT ARM";
-    statusText = `✓ SIDE PLANK (${supportSide}) - ${plankType} | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
-  } else if (bodyAligned) {
-    statusText = `Body aligned but adjust arm position | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
-  } else if (forearmPlank || straightArmPlank) {
-    statusText = `Arm good, straighten body | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
+    
+    // Start timer if not already holding
+    if (!isHoldingPlank) {
+      isHoldingPlank = true;
+      holdStartTime = Date.now();
+      lastPlankSide = supportSide;
+      console.log(`✅ Side plank detected: ${supportSide} ${plankType}`);
+    }
+    
+    // Update hold time
+    const currentHoldDuration = (Date.now() - holdStartTime) / 1000;
+    totalHoldTime = currentHoldDuration;
+    
+    statusText = `✓ SIDE PLANK (${supportSide}) - ${plankType} | Hold: ${totalHoldTime.toFixed(1)}s`;
+    
+    // Update display
+    updateHoldTimeDisplay(totalHoldTime);
+    
+    // Check if target reached - capture and send data
+    const targetTime = parseInt(targetInput.value, 10);
+    if (totalHoldTime >= targetTime && !info) {
+      console.log(`🎯 Target reached! Hold: ${totalHoldTime.toFixed(1)}s`);
+      sendPlankDataWithImage(landmarks, totalHoldTime, lastPlankSide);
+    }
+    
   } else {
-    statusText = `Not in side plank position | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
+    // Lost form - only reset if haven't reached target yet
+    if (isHoldingPlank) {
+      const targetTime = parseInt(targetInput.value, 10);
+      if (totalHoldTime >= targetTime && !info) {
+        // Just reached target and lost form - still send data
+        console.log(`✅ Side plank completed. Total hold: ${totalHoldTime.toFixed(1)}s`);
+        sendPlankDataWithImage(landmarks, totalHoldTime, lastPlankSide);
+      } else if (totalHoldTime < targetTime) {
+        console.log(`❌ Side plank form lost early. Hold: ${totalHoldTime.toFixed(1)}s (target: ${targetTime}s)`);
+      }
+      isHoldingPlank = false;
+      holdStartTime = null;
+    }
+    
+    if (bodyAligned) {
+      statusText = `Body aligned but adjust arm position | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
+    } else if (forearmPlank || straightArmPlank) {
+      statusText = `Arm good, straighten body | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
+    } else {
+      statusText = `Not in side plank position | Body:${supportBodyAngle.toFixed(0)}° Elbow:${supportElbowAngle.toFixed(0)}°`;
+    }
   }
 
   setPoseText(statusText);
 }
 
+function updateHoldTimeDisplay(holdTime) {
+  const holdTimeDisplayEl = document.getElementById("holdTimeDisplay");
+  const holdTimeStatEl = document.getElementById("holdTime");
+  
+  const formattedTime = `${holdTime.toFixed(1)}s`;
+  
+  if (holdTimeDisplayEl) {
+    holdTimeDisplayEl.textContent = formattedTime;
+  } else {
+    console.warn("holdTimeDisplay element not found");
+  }
+  
+  if (holdTimeStatEl) {
+    holdTimeStatEl.textContent = formattedTime;
+  } else {
+    console.warn("holdTime element not found");
+  }
+}
+
+let info;
+let lastPlankImageBase64 = null;
+
+function sendPlankDataWithImage(landmarks, holdDuration, side) {
+  const captureCanvas = document.createElement("canvas");
+  captureCanvas.width = video.videoWidth;
+  captureCanvas.height = video.videoHeight;
+  const captureCtx = captureCanvas.getContext("2d");
+
+  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+  lastPlankImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+
+  captureCanvas.toBlob(
+    (blob) => {
+      if (!blob) {
+        console.error("Failed to create blob from canvas.");
+        return;
+      }
+
+      const formData = new FormData();
+      
+      // Use same field name as pushups for compatibility
+      formData.append("repImage", blob, `sideplank_${holdDuration.toFixed(1)}s.jpg`);
+      
+      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
+      formData.append("keypoints", JSON.stringify(keypoints));
+
+      formData.append("exercise", "sideplank");
+      formData.append("holdDuration", holdDuration.toFixed(1));
+      formData.append("side", side);
+      // Also send as repCount for backend compatibility (optional)
+      formData.append("repCount", 1);
+      
+      console.log('📤 Sending to server:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
+      }
+
+      fetch('/api/infer', { 
+        method: 'POST',
+        body: formData 
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
+        return res.json();
+      })
+      .then(result => {
+        console.log('✅ Inference result (with image) received:', result);
+        info = {
+            ...result,
+            image_data: lastPlankImageBase64 
+        }
+      })
+      .catch(err => console.error('Error posting data to infer:', err));
+    },
+    "image/jpeg",
+    0.9 
+  );
+}
+
+function renderLLMDebug(rawText, container) {
+  if (!rawText) return;
+
+  const text = String(rawText).trim();
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const sectionNodes = [];
+  let current = { title: null, items: [], paragraphs: [] };
+
+  function pushCurrent() {
+    if (current.title || current.paragraphs.length || current.items.length) {
+      sectionNodes.push(current);
+      current = { title: null, items: [], paragraphs: [] };
+    }
+  }
+
+  for (let ln of lines) {
+    if (/^(General Observations|Recommendations|To provide more precise|AI Analysis|Debug Information|General Observations & Potential Issues|Recommendations:)/i.test(ln)) {
+      pushCurrent();
+      current.title = ln.replace(/:$/,'');
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(ln)) {
+      current.items.push(ln.replace(/^\d+\.\s+/, ''));
+      continue;
+    }
+
+    if (/^[\*\-\u2022]\s+/.test(ln)) {
+      current.items.push(ln.replace(/^[\*\-\u2022]\s+/, ''));
+      continue;
+    }
+
+    current.paragraphs.push(ln);
+  }
+  pushCurrent();
+
+  container.innerHTML = '';
+  sectionNodes.forEach((sec, idx) => {
+    const section = document.createElement('section');
+    section.className = 'debug-block';
+
+    const titleText = sec.title || (idx === 0 ? 'Summary' : `Section ${idx+1}`);
+    const h = document.createElement('h4');
+    h.textContent = titleText;
+    section.appendChild(h);
+
+    const shouldCollapse = (sec.paragraphs.join(' ') + sec.items.join(' ')).length > 600;
+    const wrapper = shouldCollapse ? document.createElement('details') : document.createElement('div');
+    if (shouldCollapse) {
+      wrapper.className = 'debug-collapsible';
+      wrapper.open = false;
+      const summary = document.createElement('summary');
+      summary.textContent = 'Expand details';
+      wrapper.appendChild(summary);
+    }
+
+    sec.paragraphs.forEach(p => {
+      const pEl = document.createElement('p');
+      pEl.innerHTML = highlightInline(p);
+      wrapper.appendChild(pEl);
+    });
+
+    if (sec.items.length) {
+      const ul = document.createElement('ul');
+      ul.className = 'debug-list';
+      sec.items.forEach(it => {
+        const li = document.createElement('li');
+        li.innerHTML = highlightInline(it);
+        ul.appendChild(li);
+      });
+      wrapper.appendChild(ul);
+    }
+
+    if (/Debug Information|Debug Analysis/i.test(titleText)) {
+      const rawBtn = document.createElement('button');
+      rawBtn.type = 'button';
+      rawBtn.className = 'btn-raw';
+      rawBtn.textContent = 'View Raw Log';
+      rawBtn.addEventListener('click', () => {
+        const pre = document.createElement('pre');
+        pre.className = 'raw-dump';
+        pre.textContent = text;
+        pre.style.whiteSpace = 'pre-wrap';
+        if (!section.querySelector('.raw-dump')) section.appendChild(pre);
+        rawBtn.disabled = true;
+      });
+      section.appendChild(rawBtn);
+    }
+
+    section.appendChild(wrapper);
+    container.appendChild(section);
+  });
+
+  function highlightInline(str) {
+    str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    str = str.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    str = str.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    str = str.replace(/\[(\d+(?:,\s*\d+)*)\]/g, '<span class="kp">[$1]</span>');
+    str = str.replace(/(\d{1,3}\s?°|degree[s]?|degrees)/gi, '<span class="meta">$1</span>');
+    return str;
+  }
+}
+
+// Report overlay
+function createReport() {
+  const overlay = document.getElementById("overlay");
+  const content = document.getElementById("reportContent");
+  
+  // Check if elements exist
+  if (!overlay || !content) {
+    console.error("Overlay elements not found in DOM");
+    return;
+  }
+  
+  const targetTime = parseInt(targetInput.value, 10);
+
+  // Check if we have feedback data (means we completed a hold)
+  if (!info || !info.image_data) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="font-size: 18px; color: var(--danger);">
+          No plank session data available yet!
+        </p>
+        <p style="color: var(--muted);">
+          Hold a side plank for at least ${targetTime}s to generate a detailed report.
+        </p>
+      </div>
+    `;
+    overlay.style.display = "block";
+    return;
+  }
+
+  // We have data - show the report
+  content.innerHTML = ''; 
+
+  const imageContainer = document.createElement("div");
+  imageContainer.className = "report-image-container";
+  
+  const img = document.createElement("img");
+  img.src = info.image_data;
+  img.alt = "Screenshot of your side plank hold";
+  
+  imageContainer.appendChild(img);
+  content.appendChild(imageContainer);
+  
+  if (info.debug) {
+    const debugSection = document.createElement('div');
+    debugSection.className = 'report-section';
+    debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
+    content.appendChild(debugSection);
+
+    const container = debugSection.querySelector('.debug-container');
+    renderLLMDebug(info.debug, container);
+  } else {
+    const noFeedback = document.createElement('div');
+    noFeedback.className = 'report-section';
+    noFeedback.innerHTML = `
+      <p style="color: var(--muted);">AI feedback is being processed...</p>
+    `;
+    content.appendChild(noFeedback);
+  }
+
+  overlay.style.display = "block";
+}
+
+function closeOverlay() {
+  const overlay = document.getElementById("overlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+
+// Event listeners
+const report = document.getElementById("detailedReportBtn");
+if (report) {
+  report.addEventListener("click", createReport);
+}
+
+const close = document.getElementById('closeOverlay');
+if (close) {
+  close.addEventListener('click', closeOverlay);
+}
+
+const overlayEl = document.getElementById('overlay');
+if (overlayEl) {
+  overlayEl.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeOverlay();
+    }
+  });
+}
+
+// Reset button
+const resetBtn = document.getElementById("resetSessionBtn");
+if (resetBtn) {
+  resetBtn.addEventListener("click", () => {
+    totalHoldTime = 0;
+    isHoldingPlank = false;
+    holdStartTime = null;
+    lastPlankSide = null;
+    info = null;
+    lastPlankImageBase64 = null;
+    updateHoldTimeDisplay(0);
+    console.log("Session reset");
+  });
+}
+
+// Demo image detection
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {
   imageEl.style.cursor = "pointer";

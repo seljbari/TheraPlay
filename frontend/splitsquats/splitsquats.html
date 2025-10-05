@@ -3,156 +3,524 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Split Squats Demo — Refined</title>
+    <title>Split Squats — Live Demo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
 
     <style>
-/* ===== Base / Theme ===== */
+/* ===== Theme & Reset ===== */
 :root{
   --bg: #0b1220;
-  --panel: rgba(255,255,255,0.08);
-  --panel-strong: rgba(255,255,255,0.15);
+  --panel: rgba(255,255,255,0.06);
+  --panel-strong: rgba(255,255,255,0.12);
   --text: #eaf1ff;
   --muted: #a9b3c7;
   --brand1: #7aa8ff;
   --brand2: #8ef3ff;
   --accent: #7df7b2;
   --danger: #ff6b6b;
-  --shadow: 0 10px 30px rgba(0,0,0,0.35);
+  --shadow: 0 12px 30px rgba(0,0,0,0.45);
+  --radius: 14px;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
   margin:0;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(122,168,255,.25), transparent 50%),
-    radial-gradient(800px 500px at 90% 10%, rgba(142,243,255,.25), transparent 55%),
+    radial-gradient(1200px 600px at 10% -10%, rgba(122,168,255,.18), transparent 40%),
+    radial-gradient(800px 500px at 90% 10%, rgba(142,243,255,.12), transparent 50%),
     linear-gradient(180deg, #0b1220 0%, #0d1226 100%);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  padding:28px 0;
 }
-.container{ width:min(1200px, 92%); margin:0 auto }
+
+/* container: use full width but constrain content visually with padding and a soft max */
+.container{
+  width:100%;
+  max-width:1600px;
+  margin:0 auto;
+  padding:0 28px;
+}
+
+/* Buttons */
 .btn{
   display:inline-flex; align-items:center; justify-content:center;
   padding:10px 14px; border-radius:10px; border:1px solid transparent;
-  font-weight:700; text-decoration:none; cursor:pointer; transition: .15s ease;
+  font-weight:700; text-decoration:none; cursor:pointer; transition: .14s ease;
 }
 .btn.primary{ background: linear-gradient(135deg, var(--brand1), var(--brand2)); color:#08101e; box-shadow: var(--shadow) }
-.btn.ghost{ background: transparent; border-color: var(--panel-strong); color: var(--text)}
+.btn.ghost{ background: transparent; border-color: rgba(255,255,255,0.06); color: var(--text)}
+.btn.small{ padding:8px 10px; font-size:13px; border-radius:9px }
 
-/* Layout */
-.hero{ padding:24px 0 }
-.hero h1{ font-size:24px; margin:0 }
-.lead{ color:var(--muted); margin-top:6px }
+/* Header */
+.hero{ padding:6px 0 25px 0 }
+.hero h1{ font-size:25px; margin:0 }
+.lead{ color:var(--muted); margin-top:6px; font-size:13px }
 
-.main-grid{ display:grid; grid-template-columns: 1fr 380px; gap:22px; align-items:start; margin-top:18px }
-@media (max-width:980px){ .main-grid{ grid-template-columns: 1fr; } }
+/* Three-column layout */
+.layout{
+  display:grid;
+  grid-template-columns: minmax(280px, 1fr) 2fr minmax(280px, 1fr);
+  gap:28px;
+  align-items:start;
+  width:100%;
+}
 
-.panel{ border-radius:14px; padding:16px; background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); box-shadow: var(--shadow) }
+/* breakpoints */
+@media (max-width:1400px){
+  .layout{ grid-template-columns: minmax(260px, 1fr) 1.6fr minmax(260px, 1fr); gap:22px; }
+}
+@media (max-width:1100px){
+  .layout{ grid-template-columns: 300px 1fr 300px; gap:18px; }
+}
+@media (max-width:920px){
+  .layout{ grid-template-columns: 1fr; gap:18px; }
+}
 
-/* Keep original classes/ids intact for your JS */
-.videoView{ display:block }
-.wrapper{ position:relative; width:100%; border-radius:10px; overflow:hidden; background:#000 }
-.wrapper video{ width:100%; height:auto; display:block }
+/* Panels */
+.panel{
+  border-radius:var(--radius);
+  padding:14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.05);
+  box-shadow: var(--shadow);
+  max-width:100%;
+}
+
+/* Center camera area */
+.center-camera{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  align-items:center;
+}
+.wrapper{
+  position:relative;
+  width:100%;
+  border-radius:12px;
+  overflow:hidden;
+  background:#000;
+  aspect-ratio:16/9;
+  min-height:340px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.wrapper video{ width:100%; height:100%; display:block; object-fit:cover }
 #output_canvas{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none }
 
-.detectOnClick img{ width:100%; border-radius:8px; display:block; cursor:pointer }
+/* status */
+.status-indicator{ display:inline-flex; gap:8px; align-items:center; padding:8px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.04); background: rgba(0,0,0,0.28); color:var(--muted) }
+.status-indicator .dot{ width:10px; height:10px; border-radius:999px; background:#7aa8ff }
+.status-active .dot{ background:var(--accent) }
+.status-thinking .dot{ background:var(--brand2) }
+.status-idle .dot{ background:#7aa8ff }
 
-/* AI feedback box */
-.ai-feedback{
-  border-radius:12px; padding:12px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-  border:1px solid rgba(255,255,255,0.04);
+/* Left column (controls) */
+.left-col{ display:flex; flex-direction:column; gap:12px; min-width:220px; max-width:360px; }
+.counter-card{
+  padding:12px;
+  border-radius:10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.03);
+  display:flex; flex-direction:column; gap:6px;
 }
-.ai-feedback h4{ margin:0 0 8px }
-.ai-feedback p{ color:var(--muted); margin:0 }
+.counter-card .label{ color:var(--muted); font-size:13px; }
+.counter-card .value{ font-size:34px; font-weight:900; color:var(--brand2); }
+.target-input{
+  display:flex; gap:8px; align-items:center;
+  padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.01);
+}
+.target-input label{ color:var(--muted); font-size:13px; min-width:56px; }
+.target-input input[type="number"]{
+  -moz-appearance: textfield;
+  appearance: none;
+  border: none;
+  outline: none;
+  color:var(--text);
+  background:transparent;
+  width:90px;
+  font-weight:800;
+  font-size:16px;
+  text-align:center;
+}
+.left-actions{ gap:10px; justify-content:flex-end; }
+
+/* Right column */
+.right-col{ display:flex; flex-direction:column; gap:12px; min-width:220px; max-width:420px; }
+
+/* AI Feedback styles */
+.feedback-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, var(--brand1), var(--brand2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.feedback-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
 
 /* Feedback content area used by your JS */
-#feedbackContent{ margin-top:10px; }
 #feedbackContent .feedback-item{ padding:10px; border-radius:8px; background: rgba(255,255,255,0.03); margin-bottom:6px }
 .feedback-header-small{ display:flex; gap:8px; align-items:center; margin-bottom:6px }
 .ai-badge{ background:linear-gradient(90deg,var(--brand1),var(--brand2)); color:#08101e; padding:4px 8px; border-radius:999px; font-weight:800 }
 .llm-feedback{ color:var(--text); margin:6px 0 }
 .feedback-score{ color:var(--muted); font-size:13px }
 
-/* Status indicator used by updateStatus() */
-.status-indicator{ display:inline-flex; gap:8px; align-items:center; padding:6px 8px; border-radius:999px; border:1px solid rgba(255,255,255,0.04); background: rgba(0,0,0,0.25); color:var(--muted) }
-.status-indicator .dot{ width:10px; height:10px; border-radius:999px; background:#7aa8ff }
-.status-active .dot{ background:var(--accent) }
-.status-thinking .dot{ background:var(--brand2) }
-.status-idle .dot{ background:#7aa8ff }
+/* stats */
+.stats{ display:flex; gap:8px; margin-top:0 }
+.stats .stat{ flex:1; padding:10px; border-radius:10px; background: rgba(255,255,255,0.02); text-align:center }
+.stats .stat small{ display:block; color:var(--muted); font-size:12px; margin-bottom:6px }
 
-/* small helpers */
-.stats{ display:flex; gap:8px; margin-top:10px }
-.stats .stat{ flex:1; padding:8px; border-radius:8px; background: rgba(255,255,255,0.02); text-align:center }
+/* demo image */
+.detectOnClick img{ width:100%; border-radius:10px; display:block; height:160px; object-fit:cover; cursor:pointer }
 
-@media (prefers-color-scheme: light){ :root{ --bg:#f6f9ff; --text:#151b26; --muted:#5b677b } }
+/* helpers */
+.hint{ color:var(--muted); font-size:13px; margin-top:6px }
+
+/* ===== Overlay (Modal) ===== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 18, 32, 0.8);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.overlay-content {
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 680px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  animation: slideUp 0.25s ease-out;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001; 
+  text-align: left;
+}
+
+.debug-block {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-left: 3px solid var(--brand1);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  color: var(--text);
+}
+
+.debug-block h4 {
+  font-size: 15px;
+  margin: 0 0 8px;
+  color: var(--brand2);
+  font-weight: 700;
+}
+
+.debug-block p {
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.debug-list {
+  margin: 8px 0 0 18px;
+  padding: 0;
+  color: var(--text);
+}
+
+.debug-list li {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.debug-collapsible summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--brand1);
+  margin-bottom: 8px;
+}
+
+.kp {
+  background: rgba(255,255,255,0.03);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.04);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+  color: var(--accent);
+  margin-left: 4px;
+}
+
+.meta {
+  color: var(--brand1);
+  font-weight: 700;
+}
+
+.btn-raw {
+  margin-top: 8px;
+  background: transparent;
+  color: var(--brand1);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.raw-dump {
+  margin-top: 10px;
+  background: rgba(0,0,0,0.45);
+  padding: 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  max-height: 260px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.report-section {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.report-section h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--brand1);
+}
+
+.report-section p {
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.report-image-container {
+  margin-bottom: 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.report-image-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.report-data {
+  background: rgba(0,0,0,0.35);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  max-height: 200px;
+}
+
+.report-data pre {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  font-family: monospace;
+}
+
+.overlay-content .btn {
+  margin-top: 12px;
+  display: block;
+  width: 100%;
+}
+
+.overlay-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, var(--brand1), var(--brand2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.overlay-content p {
+  color: var(--muted);
+  margin-bottom: 20px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.instructions {
+  margin-top: 10px;
+}
+
+.instructions h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.instructions ol {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.instructions li {
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* responsive tweaks */
+@media (max-width:920px){
+  .wrapper{ min-height:360px }
+  .detectOnClick img{ height:240px }
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f6f9ff; --text:#151b26; --muted:#5b677b }
+}
     </style>
   </head>
-  <body>
 
+  <body>
     <main class="container">
       <section class="hero">
         <h1 class="gradient">Split Squats — Live Demo</h1>
-        <p class="lead">Enable your webcam to see overlay pose detection for split-squat variations. The page keeps the same IDs and classes so your existing JavaScript continues to work.</p>
+        <p class="lead">Camera centered: left controls and right feedback — no JS changes, only frontend.</p>
       </section>
 
-      <!-- Two-column layout: left = live, right = info + AI feedback -->
-      <section id="demos" class="main-grid">
+      <section class="layout">
 
-        <!-- LEFT: live view (keeps original IDs/classes) -->
-        <div class="panel">
-          <div id="liveView" class="videoView">
+        <!-- LEFT: controls -->
+        <aside class="left-col panel" aria-label="Controls">
+          <div class="counter-card" role="status" aria-live="polite" aria-atomic="true">
+            <div class="label">Session Reps</div>
+            <div id="repsDisplay" class="value">0</div>
+          </div>
+
+          <div class="target-input" title="Set your target reps">
+            <label for="targetReps">Target</label>
+            <input id="targetReps" name="targetReps" type="number" min="1" step="1" value="10" aria-label="Target repetitions" data-hook="target-reps">
+          </div>
+
+          <div class="left-actions" style="margin-top:auto">
+            <button id="detailedReportBtn" class="btn ghost small" data-action="get-detailed-report" aria-label="Get detailed report">Detailed report</button>
+            <button id="resetSessionBtn" class="btn small" data-action="reset-session" aria-label="Reset session">Reset</button>
+          </div>
+
+          <div class="instructions" aria-hidden="false" role="note">
+            <h3>Tips to improve form</h3>
+            <ol>
+              <li>Keep your torso upright and core engaged throughout the movement.</li>
+              <li>Lower until your front knee reaches approximately 90°.</li>
+              <li>Push through your front heel to return to the starting position.</li>
+              <li>Avoid letting your front knee cave inward or extend past your toes.</li>
+            </ol>
+          </div>
+        </aside>
+
+        <!-- CENTER: camera -->
+        <div class="center-camera panel" aria-label="Camera area">
+          <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
             <button id="webcamButton" class="mdc-button mdc-button--raised btn primary">
               <span class="mdc-button__label">ENABLE WEBCAM</span>
             </button>
 
-            <div class="wrapper" style="margin-top:12px; aspect-ratio:16/9;">
-              <video id="webcam" autoplay playsinline muted></video>
-              <canvas id="output_canvas" width="1280" height="720"></canvas>
+            <div id="statusIndicator" class="status-indicator status-idle" style="font-size:13px;">
+              <span class="dot" aria-hidden="true"></span>
+              <span style="color:var(--muted)">Camera idle</span>
             </div>
           </div>
 
-          <div style="margin-top:12px; display:flex; gap:10px; align-items:center">
-            <div style="flex:1; color:var(--muted)">
-              <div id="statusIndicator" class="status-indicator status-idle"><span class="dot"></span><span>Camera idle</span></div>
-            </div>
+          <div class="wrapper" style="margin-top:12px;">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="output_canvas" width="1280" height="720"></canvas>
+          </div>
+
+          <div style="width:100%; display:flex; justify-content:space-between; gap:12px; margin-top:10px;">
+            <div style="color:var(--muted); font-size:13px">Live feed — pose overlay on canvas</div>
+            <div style="color:var(--muted); font-size:13px">Session UI centered</div>
           </div>
         </div>
 
-        <!-- RIGHT: info, AI feedback, pose checker, and static image (keeps detectOnClick class) -->
-        <aside>
-          <div class="panel" style="margin-bottom:12px">
-            <div class="ai-feedback">
-              <h4>AI Feedback</h4>
-              <div id="feedbackContent">No feedback yet — enable webcam or click the demo image to get suggestions from the AI.</div>
+        <!-- RIGHT: AI feedback + stats + demo image -->
+        <aside class="right-col panel" aria-label="Feedback and stats">
+          <div class="ai-feedback">
+            <h4 class="feedback-title">AI Feedback</h4>
+
+            <!-- Advice container -->
+            <div id="feedbackContent" class="feedback-box">
+              <p>Advice from the AI will appear here. Keep good posture, steady breathing, and controlled movements.</p>
             </div>
 
+            <!-- Stats -->
             <div class="stats">
-              <div class="stat">Form Score<br/><strong id="formScore">—</strong></div>
-              <div class="stat">Confidence<br/><strong id="confidence">—</strong></div>
+              <div class="stat">
+                <small>Form Score</small>
+                <strong id="formScore">—</strong>
+              </div>
+              <div class="stat">
+                <small>Confidence</small>
+                <strong id="confidence">—</strong>
+              </div>
+              <div class="stat">
+                <small>Reps Done</small>
+                <strong id="repsCount">0</strong>
+              </div>
             </div>
           </div>
 
-
-          <div class="panel" style="margin-top:12px">
-            <div class="detectOnClick">
-              <img
-                src="https://www.trainheroic.com/wp-content/uploads/2022/10/Bulgarian-Split-Squat.jpg"
-                crossorigin="anonymous"
-                alt="Click to get split-squat detection!"
-                title="Click to get split-squat detection!">
+          <div style="margin-top:12px" class="detectOnClick">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="font-weight:800">Demo image</div>
+              <div style="color:var(--muted); font-size:13px">Click to trigger detection</div>
             </div>
+            <img src="https://www.trainheroic.com/wp-content/uploads/2022/10/Bulgarian-Split-Squat.jpg" crossorigin="anonymous" alt="Click to get detection!" title="Click to get detection!">
           </div>
         </aside>
 
       </section>
 
-      <section id="guide" style="margin-top:20px">
-        <div class="panel">
-          <h3 style="margin:0">How this page works</h3>
-          <p class="lead" style="margin-top:8px">This page preserves the original IDs and classes your script expects: <code>#webcamButton</code>, <code>#webcam</code>, <code>#output_canvas</code>, <code>#poseChecker</code>, <code>.detectOnClick</code>, and now <code>#feedbackContent</code> and <code>#statusIndicator</code> for AI/LLM updates. Your module at <code>/splitsquats/splitsquatsmodel.js</code> should continue to work without changes.</p>
+      <section>
+        <div id="overlay" class="overlay" style="display:none;">
+          <div class="overlay-content">
+            <h2 class="overlay-title">Detailed Report</h2>
+            <p id="reportContent">Your report goes here...</p>
+            <button id="closeOverlay" class="btn ghost small">Close</button>
+          </div>
         </div>
       </section>
 
@@ -160,7 +528,6 @@ body{
 
     <footer style="padding:20px 0; text-align:center; color:var(--muted)">© FormLab — privacy-first • local-only processing</footer>
 
-    <!-- keep your model script reference; no inline JS so your existing handlers control behavior -->
     <script type="module" src="/splitsquats/splitsquatsmodel.js"></script>
   </body>
 </html>

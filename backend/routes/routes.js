@@ -1,33 +1,60 @@
 // backend/routes/routes.js - SIMPLE VERSION THAT WORKS
 const express = require('express');
 const router = express.Router();
+const multer = require('multer'); // 👈 ADD THIS
+require('dotenv').config();
 
-const GEMINI_API_KEY = 'env';
+const upload = multer({ storage: multer.memoryStorage() }); // 👈 ADD THIS
 
-router.post('/infer', async (req, res) => {
-  try {
-    const { exercise, angles } = req.body || {};
+const GEMINI_API_KEY =  process.env.GEMINI_API_KEY;
+
+router.post('/infer', upload.single('repImage'), async (req, res) => { 
+  try {
+
+    const repImage = req.file; // The image file is here
+    const { exercise, keypoints, repCount } = req.body || {}; 
     
-    if (!exercise || !angles) {
+
+      // ⚠️ CHANGE: Check for image, exercise, and keypoints
+  // Better validation that checks for actual missing data
+    if (!repImage || !exercise || !keypoints) {
+      console.log('❌ Validation failed - missing required fields');
       return res.json({
         score: 0,
-        corrections: ['Missing exercise or angles'],
-        rationale: ['Please provide both exercise name and angles'],
+        corrections: ['Missing image, exercise, or keypoints'],
+        rationale: ['Please provide all required form data'],
         safety_flag: 'BadRequest'
       });
     }
 
-    const prompt = `You are a physical therapy coach analyzing form.
-Exercise: ${exercise}
-Angles measured: ${JSON.stringify(angles)}
+    let parsedKeypoints;
+    try {
+      parsedKeypoints = JSON.parse(keypoints);
+      
+      // Check if it's actually an array with data
+      if (!Array.isArray(parsedKeypoints) || parsedKeypoints.length === 0) {
+        throw new Error('Keypoints array is empty');
+      }
+    } catch (e) {
+      console.error('Failed to parse keypoints:', e.message);
+      return res.json({
+        score: 0,
+        corrections: ['Invalid keypoints data'],
+        rationale: ['Keypoints must be a valid JSON array'],
+        safety_flag: 'BadRequest'
+      });
+    }
 
-Respond with ONLY a JSON object (no markdown, no extra text) with these fields:
-- score: number from 0-100
-- corrections: array of specific form corrections needed
-- rationale: array of explanations for the corrections
-- safety_flag: "Good", "Warning", or "Danger"
-
-Example: {"score":85,"corrections":["Bend knee more"],"rationale":["Better muscle engagement"],"safety_flag":"Good"}`;
+    console.log(`Received image: ${repImage.originalname}, size: ${repImage.size} bytes`);
+    console.log(`Received exercise: ${exercise}, Rep: ${repCount}`);
+    
+    // In a real application, you would calculate angles from parsedKeypoints here
+    // For now, we will use the keypoints array directly in the prompt
+    
+    const prompt = `You are a physical therapy coach analyzing form.
+    Exercise: ${exercise}
+    Keypoints measured for the completed rep: ${JSON.stringify(parsedKeypoints, null, 2)}
+    ... (rest of your existing prompt structure) ...`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,

@@ -1,4 +1,3 @@
-
 // splitsquatsmodel.js
 import {
   PoseLandmarker,
@@ -210,88 +209,352 @@ async function predictWebcam() {
   }
 }
 
+let lastPose = "up";
+let repCount = 0;
+const targetInput = document.getElementById("targetReps");
+
 function processAndDisplayPose(landmarks) {
-  const leftShoulder = landmarks[11];
-  const rightShoulder = landmarks[12];
-  const leftHip = landmarks[23];
-  const rightHip = landmarks[24];
-  const leftKnee = landmarks[25];
-  const rightKnee = landmarks[26];
-  const leftAnkle = landmarks[27];
-  const rightAnkle = landmarks[28];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    const leftKnee = landmarks[25];
+    const rightKnee = landmarks[26];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
 
-  let isSplitSquat = false;
-  let statusText = "";
+    // Calculate knee angles
+    const leftKneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
+    const rightKneeAngle = getAngle(rightHip, rightKnee, rightAnkle);
 
-  // Calculate knee angles for both legs
-  const leftKneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
-  const rightKneeAngle = getAngle(rightHip, rightKnee, rightAnkle);
+    // Calculate hip angles (torso alignment)
+    const leftHipAngle = getAngle(leftShoulder, leftHip, leftKnee);
+    const rightHipAngle = getAngle(rightShoulder, rightHip, rightKnee);
 
-  // Calculate hip angles (torso alignment)
-  const leftHipAngle = getAngle(leftShoulder, leftHip, leftKnee);
-  const rightHipAngle = getAngle(rightShoulder, rightHip, rightKnee);
-
-  // Calculate ankle to hip vertical distance to determine which leg is forward/back
-  const leftLegForward = leftAnkle.z < rightAnkle.z; // z-axis determines depth
-  const rightLegForward = !leftLegForward;
-
-  // Draw angle arcs
-  drawAngleArc(leftHip, leftKnee, leftAnkle, leftKneeAngle, "cyan");
-  drawAngleArc(rightHip, rightKnee, rightAnkle, rightKneeAngle, "cyan");
-
-  drawAngleArc(leftShoulder, leftHip, leftKnee, leftHipAngle, "yellow");
-  drawAngleArc(rightShoulder, rightHip, rightKnee, rightHipAngle, "yellow");
-
-  // Determine front and back leg based on position
-  let frontKneeAngle, backKneeAngle, frontLeg, backLeg;
-  
-  if (Math.abs(leftAnkle.x - rightAnkle.x) > 0.15) { // Legs are split horizontally
-    if (leftAnkle.x < rightAnkle.x) {
-      frontKneeAngle = leftKneeAngle;
-      backKneeAngle = rightKneeAngle;
-      frontLeg = "Left";
-      backLeg = "Right";
+    // Determine which leg is forward (front leg will have knee more bent in split squat position)
+    // Front leg should be bent more during the down position
+    let frontKneeAngle, backKneeAngle, frontHipAngle, backHipAngle;
+    let frontSide, backSide;
+    
+    // Detect split stance by ankle position (front foot will be further forward in z-depth or x-position)
+    const isLeftFootForward = leftAnkle.z < rightAnkle.z || leftAnkle.x < rightAnkle.x;
+    
+    if (isLeftFootForward) {
+        frontKneeAngle = leftKneeAngle;
+        backKneeAngle = rightKneeAngle;
+        frontHipAngle = leftHipAngle;
+        backHipAngle = rightHipAngle;
+        frontSide = "LEFT";
+        backSide = "RIGHT";
+        
+        drawAngleArc(leftHip, leftKnee, leftAnkle, leftKneeAngle, "cyan");
+        drawAngleArc(rightHip, rightKnee, rightAnkle, rightKneeAngle, "yellow");
+        drawAngleArc(leftShoulder, leftHip, leftKnee, leftHipAngle, "magenta");
+        drawAngleArc(rightShoulder, rightHip, rightKnee, rightHipAngle, "orange");
     } else {
-      frontKneeAngle = rightKneeAngle;
-      backKneeAngle = leftKneeAngle;
-      frontLeg = "Right";
-      backLeg = "Left";
+        frontKneeAngle = rightKneeAngle;
+        backKneeAngle = leftKneeAngle;
+        frontHipAngle = rightHipAngle;
+        backHipAngle = leftHipAngle;
+        frontSide = "RIGHT";
+        backSide = "LEFT";
+        
+        drawAngleArc(rightHip, rightKnee, rightAnkle, rightKneeAngle, "cyan");
+        drawAngleArc(leftHip, leftKnee, leftAnkle, leftKneeAngle, "yellow");
+        drawAngleArc(rightShoulder, rightHip, rightKnee, rightHipAngle, "magenta");
+        drawAngleArc(leftShoulder, leftHip, leftKnee, leftHipAngle, "orange");
     }
 
-    // Check for proper split squat form
-    const avgHipAngle = (leftHipAngle + rightHipAngle) / 2;
-    const isUpright = avgHipAngle > 160 && avgHipAngle < 200; // Torso is upright
+    // Split squat detection criteria
+    const isSplitStance = Math.abs(leftAnkle.z - rightAnkle.z) > 0.1 || Math.abs(leftAnkle.x - rightAnkle.x) > 0.15;
+    const isTorsoUpright = (leftHipAngle + rightHipAngle) / 2 > 150; // Torso should be relatively upright
     
-    // Split squat down position: front knee bent ~90 degrees
-    const isDown = frontKneeAngle >= 70 && frontKneeAngle <= 110;
+    // Down position: front knee bent (70-110 degrees)
+    const isDown = frontKneeAngle < 110 && frontKneeAngle > 70;
     
-    // Split squat up position: front knee more extended
-    const isUp = frontKneeAngle >= 150 && frontKneeAngle <= 180;
+    // Up position: front knee extended (140+ degrees)
+    const isUp = frontKneeAngle > 140;
 
-    if (isUpright && isDown) {
-      isSplitSquat = true;
-      statusText = `SPLIT SQUAT DOWN! ${frontLeg} Front:${frontKneeAngle.toFixed(0)}° ${backLeg} Back:${backKneeAngle.toFixed(0)}°`;
-    } else if (isUpright && isUp) {
-      isSplitSquat = true;
-      statusText = `SPLIT SQUAT UP! ${frontLeg} Front:${frontKneeAngle.toFixed(0)}° ${backLeg} Back:${backKneeAngle.toFixed(0)}°`;
-    } else if (isUpright) {
-      statusText = `Split Stance - ${frontLeg} Front:${frontKneeAngle.toFixed(0)}° ${backLeg} Back:${backKneeAngle.toFixed(0)}°`;
+    let statusText = "";
+
+    if (isSplitStance && isTorsoUpright) {
+        if (isDown) {
+            statusText = `SPLIT SQUAT DOWN! (${frontSide} LEG FORWARD)`;
+            if (lastPose !== "down") {
+                lastPose = "down";
+                console.log("📍 Down position detected");
+            }
+        } else if (isUp) {
+            statusText = `SPLIT SQUAT UP! (${frontSide} LEG FORWARD)`;
+
+            if (lastPose === "down") {
+                repCount++;
+                console.log("✅ Rep completed:", repCount);
+                
+                // Update both display elements
+                const repsDisplayEl = document.getElementById("repsDisplay");
+                const repsCountEl = document.getElementById("repsCount");
+                
+                if (repsDisplayEl) repsDisplayEl.textContent = repCount;
+                if (repsCountEl) repsCountEl.textContent = repCount;
+
+                sendRepDataWithImage(landmarks);
+            }
+
+            lastPose = "up";
+        } else {
+            statusText = `Split Stance - Continue movement (${frontSide} forward)`;
+        }
+    } else if (isSplitStance) {
+        statusText = `Split Stance detected - Keep torso upright`;
     } else {
-      statusText = `In position but lean forward - Front:${frontKneeAngle.toFixed(0)}° Back:${backKneeAngle.toFixed(0)}°`;
+        statusText = "Not in split squat position - Step one foot back";
     }
-  } else {
-    // Legs are not split
-    statusText = `Not in split stance - L:${leftKneeAngle.toFixed(0)}° R:${rightKneeAngle.toFixed(0)}°`;
+
+    setPoseText(`${statusText} | Reps: ${repCount}`);
+}
+
+let info;
+let lastRepImageBase64 = null;
+
+function sendRepDataWithImage(landmarks) {
+  const captureCanvas = document.createElement("canvas");
+  captureCanvas.width = video.videoWidth;
+  captureCanvas.height = video.videoHeight;
+  const captureCtx = captureCanvas.getContext("2d");
+
+  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+  lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+
+  captureCanvas.toBlob(
+    (blob) => {
+      if (!blob) {
+        console.error("Failed to create blob from canvas.");
+        return;
+      }
+
+      const formData = new FormData();
+      
+      formData.append("repImage", blob, `rep_${repCount}.jpg`);
+      
+      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
+      formData.append("keypoints", JSON.stringify(keypoints));
+
+      formData.append("exercise", "splitsquat");
+      formData.append("repCount", repCount);
+      
+      console.log('📤 Sending to server:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
+      }
+
+      fetch('/api/infer', { 
+        method: 'POST',
+        body: formData 
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
+        return res.json();
+      })
+      .then(result => {
+        console.log('✅ Inference result (with image) received:', result);
+        info = {
+            ...result,
+            image_data: lastRepImageBase64 
+        }
+      })
+      .catch(err => console.error('Error posting data to infer:', err));
+    },
+    "image/jpeg",
+    0.9 
+  );
+}
+document.getElementById("resetSessionBtn").addEventListener("click", () => {
+    repCount = 0;
+    lastPose = "up";
+    document.getElementById("repsDisplay").textContent = repCount;
+    document.getElementById("repsCount").textContent = repCount;
+    setPoseText("");
+    console.log("Session reset");
+});
+function renderLLMDebug(rawText, container) {
+  if (!rawText) return;
+
+  const text = String(rawText).trim();
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const sectionNodes = [];
+  let current = { title: null, items: [], paragraphs: [] };
+
+  function pushCurrent() {
+    if (current.title || current.paragraphs.length || current.items.length) {
+      sectionNodes.push(current);
+      current = { title: null, items: [], paragraphs: [] };
+    }
   }
 
-  setPoseText(statusText);
+  for (let ln of lines) {
+    if (/^(General Observations|Recommendations|To provide more precise|AI Analysis|Debug Information|General Observations & Potential Issues|Recommendations:)/i.test(ln)) {
+      pushCurrent();
+      current.title = ln.replace(/:$/,'');
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(ln)) {
+      current.items.push(ln.replace(/^\d+\.\s+/, ''));
+      continue;
+    }
+
+    if (/^[\*\-\u2022]\s+/.test(ln)) {
+      current.items.push(ln.replace(/^[\*\-\u2022]\s+/, ''));
+      continue;
+    }
+
+    current.paragraphs.push(ln);
+  }
+  pushCurrent();
+
+  container.innerHTML = '';
+  sectionNodes.forEach((sec, idx) => {
+    const section = document.createElement('section');
+    section.className = 'debug-block';
+
+    const titleText = sec.title || (idx === 0 ? 'Summary' : `Section ${idx+1}`);
+    const h = document.createElement('h4');
+    h.textContent = titleText;
+    section.appendChild(h);
+
+    const shouldCollapse = (sec.paragraphs.join(' ') + sec.items.join(' ')).length > 600;
+    const wrapper = shouldCollapse ? document.createElement('details') : document.createElement('div');
+    if (shouldCollapse) {
+      wrapper.className = 'debug-collapsible';
+      wrapper.open = false;
+      const summary = document.createElement('summary');
+      summary.textContent = 'Expand details';
+      wrapper.appendChild(summary);
+    }
+
+    sec.paragraphs.forEach(p => {
+      const pEl = document.createElement('p');
+      pEl.innerHTML = highlightInline(p);
+      wrapper.appendChild(pEl);
+    });
+
+    if (sec.items.length) {
+      const ul = document.createElement('ul');
+      ul.className = 'debug-list';
+      sec.items.forEach(it => {
+        const li = document.createElement('li');
+        li.innerHTML = highlightInline(it);
+        ul.appendChild(li);
+      });
+      wrapper.appendChild(ul);
+    }
+
+    if (/Debug Information|Debug Analysis/i.test(titleText)) {
+      const rawBtn = document.createElement('button');
+      rawBtn.type = 'button';
+      rawBtn.className = 'btn-raw';
+      rawBtn.textContent = 'View Raw Log';
+      rawBtn.addEventListener('click', () => {
+        const pre = document.createElement('pre');
+        pre.className = 'raw-dump';
+        pre.textContent = text;
+        pre.style.whiteSpace = 'pre-wrap';
+        if (!section.querySelector('.raw-dump')) section.appendChild(pre);
+        rawBtn.disabled = true;
+      });
+      section.appendChild(rawBtn);
+    }
+
+    section.appendChild(wrapper);
+    container.appendChild(section);
+  });
+
+  function highlightInline(str) {
+    str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    str = str.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    str = str.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    str = str.replace(/\[(\d+(?:,\s*\d+)*)\]/g, '<span class="kp">[$1]</span>');
+    str = str.replace(/(\d{1,3}\s?°|degree[s]?|degrees)/gi, '<span class="meta">$1</span>');
+    return str;
+  }
 }
+
+function createReport() {
+  const targetReps = parseInt(targetInput.value, 10);
+  const overlay = document.getElementById("overlay");
+  const content = document.getElementById("reportContent");
+
+  if (repCount < targetReps) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="font-size: 18px; color: var(--danger);">
+          You still need to complete ${targetReps - repCount} more reps to reach your target!
+        </p>
+        <p style="color: var(--muted);">
+          Current: ${repCount} / ${targetReps} reps
+        </p>
+      </div>
+    `;
+    overlay.style.display = "block";
+    return;
+  } 
+
+  content.innerHTML = ''; 
+
+    if (info && info.image_data) {
+        const imageContainer = document.createElement("div");
+        imageContainer.className = "report-image-container";
+        
+        const img = document.createElement("img");
+        img.src = info.image_data;
+        img.alt = "Screenshot of your final split squat rep";
+        
+        imageContainer.appendChild(img);
+        content.appendChild(imageContainer);
+    }
+    
+    if (info.debug) {
+        const debugSection = document.createElement('div');
+        debugSection.className = 'report-section';
+        debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
+        content.appendChild(debugSection);
+
+        const container = debugSection.querySelector('.debug-container');
+        renderLLMDebug(info.debug, container);
+    } else {
+        content.innerHTML = `
+        <div class="report-section">
+            <p style="color: var(--muted);">No AI feedback data available yet. Complete a rep to generate analysis.</p>
+        </div>
+        `;
+    }
+
+  overlay.style.display = "block";
+}
+
+function closeOverlay() {
+  document.getElementById("overlay").style.display = "none";
+}
+
+const report = document.getElementById("detailedReportBtn");
+report.addEventListener("click", createReport);
+
+const close = document.getElementById('closeOverlay');
+close.addEventListener('click', closeOverlay);
+
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeOverlay();
+  }
+});
 
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {
   imageEl.style.cursor = "pointer";
   imageEl.addEventListener("click", async () => {
-    if (!poseLandmarkerImage) {
+  if (!poseLandmarkerImage) {
       console.warn("Image landmarker not ready yet.");
       return;
     }

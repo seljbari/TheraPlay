@@ -209,6 +209,10 @@ async function predictWebcam() {
   }
 }
 
+let lastPose = "up";
+let repCount = 0;
+const targetInput = document.getElementById("targetReps");
+
 function processAndDisplayPose(landmarks) {
   const leftShoulder = landmarks[11];
   const rightShoulder = landmarks[12];
@@ -219,53 +223,279 @@ function processAndDisplayPose(landmarks) {
   const leftAnkle = landmarks[27];
   const rightAnkle = landmarks[28];
 
-  let isSquat = false;
-  let statusText = "";
-
-  // Key angles for squat detection
   const leftKneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
   const rightKneeAngle = getAngle(rightHip, rightKnee, rightAnkle);
+  const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
 
   const leftHipAngle = getAngle(leftShoulder, leftHip, leftKnee);
   const rightHipAngle = getAngle(rightShoulder, rightHip, rightKnee);
+  const avgHipAngle = (leftHipAngle + rightHipAngle) / 2;
 
-  const leftBackAngle = getAngle(leftShoulder, leftHip, leftAnkle);
-  const rightBackAngle = getAngle(rightShoulder, rightHip, rightAnkle);
-
-  // Draw the angles
   drawAngleArc(leftHip, leftKnee, leftAnkle, leftKneeAngle, "cyan");
   drawAngleArc(rightHip, rightKnee, rightAnkle, rightKneeAngle, "cyan");
-
   drawAngleArc(leftShoulder, leftHip, leftKnee, leftHipAngle, "yellow");
   drawAngleArc(rightShoulder, rightHip, rightKnee, rightHipAngle, "yellow");
 
-
-  const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
-  const avgHipAngle = (leftHipAngle + rightHipAngle) / 2;
-  
-  // Check if person is in standing position (knees extended)
   const isStanding = avgKneeAngle > 160;
-  
-  // Check if person is in deep squat (knees bent significantly)
   const isDeepSquat = avgKneeAngle < 100 && avgHipAngle < 100;
-  
-  // Check if person is in partial squat
-  const isPartialSquat = avgKneeAngle >= 100 && avgKneeAngle <= 140;
+
+  let statusText = "";
 
   if (isDeepSquat) {
-    isSquat = true;
-    statusText = `DEEP SQUAT! Knees:${avgKneeAngle.toFixed(0)}° Hips:${avgHipAngle.toFixed(0)}°`;
-  } else if (isPartialSquat) {
-    isSquat = true;
-    statusText = `PARTIAL SQUAT - Knees:${avgKneeAngle.toFixed(0)}° Hips:${avgHipAngle.toFixed(0)}°`;
+    statusText = "SQUAT DOWN!";
+    lastPose = "down";
   } else if (isStanding) {
-    statusText = `STANDING - Knees:${avgKneeAngle.toFixed(0)}° Hips:${avgHipAngle.toFixed(0)}°`;
+    statusText = "SQUAT UP!";
+
+    if (lastPose === "down") {
+      repCount++;
+      console.log("✅ Rep completed:", repCount);
+      
+      // Update the display
+      const repsDisplay = document.getElementById("repsDisplay");
+      const repsCount = document.getElementById("repsCount");
+      if (repsDisplay) repsDisplay.textContent = repCount;
+      if (repsCount) repsCount.textContent = repCount;
+      
+      sendRepDataWithImage(landmarks);
+    }
+
+    lastPose = "up";
   } else {
-    statusText = `Position - Knees:${avgKneeAngle.toFixed(0)}° Hips:${avgHipAngle.toFixed(0)}°`;
+    statusText = "Transitioning...";
   }
 
-  setPoseText(statusText);
+  setPoseText(`${statusText} | Reps: ${repCount}`);
 }
+
+let info;
+let lastRepImageBase64 = null;
+
+function sendRepDataWithImage(landmarks) {
+  const captureCanvas = document.createElement("canvas");
+  captureCanvas.width = video.videoWidth;
+  captureCanvas.height = video.videoHeight;
+  const captureCtx = captureCanvas.getContext("2d");
+
+  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+  lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+
+  captureCanvas.toBlob(
+    (blob) => {
+      if (!blob) {
+        console.error("Failed to create blob from canvas.");
+        return;
+      }
+
+      const formData = new FormData();
+      
+      formData.append("repImage", blob, `rep_${repCount}.jpg`);
+      
+      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
+      formData.append("keypoints", JSON.stringify(keypoints));
+
+      formData.append("exercise", "squat");
+      formData.append("repCount", repCount);
+      
+      console.log('📤 Sending to server:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
+      }
+
+      fetch('/api/infer', { 
+        method: 'POST',
+        body: formData 
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
+        return res.json();
+      })
+      .then(result => {
+        console.log('✅ Inference result (with image) received:', result);
+        info = {
+            ...result,
+            image_data: lastRepImageBase64 
+        }
+      })
+      .catch(err => console.error('Error posting data to infer:', err));
+    },
+    "image/jpeg",
+    0.9 
+  );
+}
+
+function renderLLMDebug(rawText, container) {
+  if (!rawText) return;
+
+  const text = String(rawText).trim();
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const sectionNodes = [];
+  let current = { title: null, items: [], paragraphs: [] };
+
+  function pushCurrent() {
+    if (current.title || current.paragraphs.length || current.items.length) {
+      sectionNodes.push(current);
+      current = { title: null, items: [], paragraphs: [] };
+    }
+  }
+
+  for (let ln of lines) {
+    if (/^(General Observations|Recommendations|To provide more precise|AI Analysis|Debug Information|General Observations & Potential Issues|Recommendations:)/i.test(ln)) {
+      pushCurrent();
+      current.title = ln.replace(/:$/,'');
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(ln)) {
+      current.items.push(ln.replace(/^\d+\.\s+/, ''));
+      continue;
+    }
+
+    if (/^[\*\-\u2022]\s+/.test(ln)) {
+      current.items.push(ln.replace(/^[\*\-\u2022]\s+/, ''));
+      continue;
+    }
+
+    current.paragraphs.push(ln);
+  }
+  pushCurrent();
+
+  container.innerHTML = '';
+  sectionNodes.forEach((sec, idx) => {
+    const section = document.createElement('section');
+    section.className = 'debug-block';
+
+    const titleText = sec.title || (idx === 0 ? 'Summary' : `Section ${idx+1}`);
+    const h = document.createElement('h4');
+    h.textContent = titleText;
+    section.appendChild(h);
+
+    const shouldCollapse = (sec.paragraphs.join(' ') + sec.items.join(' ')).length > 600;
+    const wrapper = shouldCollapse ? document.createElement('details') : document.createElement('div');
+    if (shouldCollapse) {
+      wrapper.className = 'debug-collapsible';
+      wrapper.open = false;
+      const summary = document.createElement('summary');
+      summary.textContent = 'Expand details';
+      wrapper.appendChild(summary);
+    }
+
+    sec.paragraphs.forEach(p => {
+      const pEl = document.createElement('p');
+      pEl.innerHTML = highlightInline(p);
+      wrapper.appendChild(pEl);
+    });
+
+    if (sec.items.length) {
+      const ul = document.createElement('ul');
+      ul.className = 'debug-list';
+      sec.items.forEach(it => {
+        const li = document.createElement('li');
+        li.innerHTML = highlightInline(it);
+        ul.appendChild(li);
+      });
+      wrapper.appendChild(ul);
+    }
+
+    if (/Debug Information|Debug Analysis/i.test(titleText)) {
+      const rawBtn = document.createElement('button');
+      rawBtn.type = 'button';
+      rawBtn.className = 'btn-raw';
+      rawBtn.textContent = 'View Raw Log';
+      rawBtn.addEventListener('click', () => {
+        const pre = document.createElement('pre');
+        pre.className = 'raw-dump';
+        pre.textContent = text;
+        pre.style.whiteSpace = 'pre-wrap';
+        if (!section.querySelector('.raw-dump')) section.appendChild(pre);
+        rawBtn.disabled = true;
+      });
+      section.appendChild(rawBtn);
+    }
+
+    section.appendChild(wrapper);
+    container.appendChild(section);
+  });
+
+  function highlightInline(str) {
+    str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    str = str.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    str = str.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    str = str.replace(/\[(\d+(?:,\s*\d+)*)\]/g, '<span class="kp">[$1]</span>');
+    str = str.replace(/(\d{1,3}\s?°|degree[s]?|degrees)/gi, '<span class="meta">$1</span>');
+    return str;
+  }
+}
+
+function createReport() {
+  const targetReps = parseInt(targetInput.value, 10);
+  const overlay = document.getElementById("overlay");
+  const content = document.getElementById("reportContent");
+
+  if (repCount < targetReps) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="font-size: 18px; color: var(--danger);">
+          You still need to complete ${targetReps - repCount} more reps to reach your target!
+        </p>
+        <p style="color: var(--muted);">
+          Current: ${repCount} / ${targetReps} reps
+        </p>
+      </div>
+    `;
+    overlay.style.display = "block";
+    return;
+  } 
+
+  content.innerHTML = ''; 
+
+  if (info && info.image_data) {
+    const imageContainer = document.createElement("div");
+    imageContainer.className = "report-image-container";
+    
+    const img = document.createElement("img");
+    img.src = info.image_data;
+    img.alt = "Screenshot of your final squat rep";
+    
+    imageContainer.appendChild(img);
+    content.appendChild(imageContainer);
+  }
+
+  if (info.debug) {
+    const debugSection = document.createElement('div');
+    debugSection.className = 'report-section';
+    debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
+    content.appendChild(debugSection);
+
+    const container = debugSection.querySelector('.debug-container');
+    renderLLMDebug(info.debug, container);
+  } else {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="color: var(--muted);">No AI feedback data available yet. Complete a rep to generate analysis.</p>
+      </div>
+    `;
+  }
+
+  overlay.style.display = "block";
+}
+
+function closeOverlay() {
+  document.getElementById("overlay").style.display = "none";
+}
+
+const report = document.getElementById("detailedReportBtn");
+report.addEventListener("click", createReport);
+
+const close = document.getElementById('closeOverlay');
+close.addEventListener('click', closeOverlay);
+
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeOverlay();
+  }
+});
 
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {

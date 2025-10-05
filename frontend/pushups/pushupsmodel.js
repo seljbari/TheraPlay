@@ -208,78 +208,340 @@ async function predictWebcam() {
     window.requestAnimationFrame(predictWebcam);
   }
 }
+let lastPose = "up";
+let repCount = 0;
+const targetInput = document.getElementById("targetReps");
+
+// Function to update all rep displays
+function updateRepDisplay() {
+    const repsDisplay = document.getElementById("repsDisplay");
+    const repsCount = document.getElementById("repsCount");
+    
+    if (repsDisplay) repsDisplay.textContent = repCount;
+    if (repsCount) repsCount.textContent = repCount;
+}
 
 function processAndDisplayPose(landmarks) {
-  const leftShoulder = landmarks[11];
-  const rightShoulder = landmarks[12];
-  const leftElbow = landmarks[13];
-  const rightElbow = landmarks[14];
-  const leftWrist = landmarks[15];
-  const rightWrist = landmarks[16];
-  const leftHip = landmarks[23];
-  const rightHip = landmarks[24];
-  const leftKnee = landmarks[25];
-  const rightKnee = landmarks[26];
-  const leftAnkle = landmarks[27];
-  const rightAnkle = landmarks[28];
-  const nose = landmarks[0];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftElbow = landmarks[13];
+    const rightElbow = landmarks[14];
+    const leftWrist = landmarks[15];
+    const rightWrist = landmarks[16];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
+    const nose = landmarks[0];
 
-  let isPushUp = false;
-  let statusText = "";
+    const leftElbowAngle = getAngle(leftShoulder, leftElbow, leftWrist);
+    const rightElbowAngle = getAngle(rightShoulder, rightElbow, rightWrist);
+    const avgElbowAngle = (leftElbowAngle + rightElbowAngle) / 2;
 
-  const leftElbowAngle = getAngle(leftShoulder, leftElbow, leftWrist);
-  const rightElbowAngle = getAngle(rightShoulder, rightElbow, rightWrist);
+    const leftBackAngle = getAngle(leftShoulder, leftHip, leftAnkle);
+    const rightBackAngle = getAngle(rightShoulder, rightHip, rightAnkle);
+    const avgBackAngle = (leftBackAngle + rightBackAngle) / 2;
 
-  const leftBackAngle = getAngle(leftShoulder, leftHip, leftAnkle);
-  const rightBackAngle = getAngle(rightShoulder, rightHip, rightAnkle);
+    const isHorizontal = avgBackAngle > 160 && avgBackAngle < 200;
+    const elbowsBent = avgElbowAngle < 110;
+    const elbowsExtended = avgElbowAngle > 150;
 
-  const leftHeadAngle = getAngle(nose, leftShoulder, leftHip);
-  const rightHeadAngle = getAngle(nose, rightShoulder, rightHip);
+    let statusText = "";
 
-  const leftKneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
-  const rightKneeAngle = getAngle(rightHip, rightKnee, rightAnkle);
+    drawAngleArc(leftShoulder, leftElbow, leftWrist, leftElbowAngle, "cyan");
+    drawAngleArc(rightShoulder, rightElbow, rightWrist, rightElbowAngle, "cyan");
+    drawAngleArc(leftShoulder, leftHip, leftAnkle, leftBackAngle, "yellow");
+    drawAngleArc(rightShoulder, rightHip, rightAnkle, rightBackAngle, "yellow");
+    
+    if (isHorizontal && elbowsBent) {
+        statusText = "PUSH-UP DOWN!";
+        lastPose = "down";
+    } else if (isHorizontal && elbowsExtended) {
+        statusText = "PUSH-UP UP!";
 
-  drawAngleArc(leftShoulder, leftElbow, leftWrist, leftElbowAngle, "cyan");
-  drawAngleArc(rightShoulder, rightElbow, rightWrist, rightElbowAngle, "cyan");
+        if (lastPose === "down") {
+            repCount++;
+            console.log("✅ Rep completed:", repCount);
+            
+            // Update all rep displays immediately
+            updateRepDisplay();
+            
+            sendRepDataWithImage(landmarks);
+        }
 
-  drawAngleArc(leftShoulder, leftHip, leftAnkle, leftBackAngle, "yellow");
-  drawAngleArc(rightShoulder, rightHip, rightAnkle, rightBackAngle, "yellow");
+        lastPose = "up";
+    } else if (isHorizontal) {
+        statusText = "Plank Position";
+    } else {
+        statusText = "Standing/Not in position";
+    }
 
-  drawAngleArc(nose, leftShoulder, leftHip, leftHeadAngle, "magenta");
-  drawAngleArc(nose, rightShoulder, rightHip, rightHeadAngle, "magenta");
+    setPoseText(`${statusText} | Reps: ${repCount}`);
+}
 
-  drawAngleArc(leftHip, leftKnee, leftAnkle, leftKneeAngle, "orange");
-  drawAngleArc(rightHip, rightKnee, rightAnkle, rightKneeAngle, "orange");
+let info;
+let lastRepImageBase64 = null;
 
-  const avgElbowAngle = (leftElbowAngle + rightElbowAngle) / 2;
-  const avgBackAngle = (leftBackAngle + rightBackAngle) / 2;
-  
-  const isHorizontal = avgBackAngle > 160 && avgBackAngle < 200;
-  
-  const elbowsBent = avgElbowAngle < 110;
-  
-  const elbowsExtended = avgElbowAngle > 150;
+function sendRepDataWithImage(landmarks) {
+  const captureCanvas = document.createElement("canvas");
+  captureCanvas.width = video.videoWidth;
+  captureCanvas.height = video.videoHeight;
+  const captureCtx = captureCanvas.getContext("2d");
 
-  if (isHorizontal && elbowsBent) {
-    isPushUp = true;
-    statusText = `PUSH-UP DOWN! Elbows:${avgElbowAngle.toFixed(0)}° Back:${avgBackAngle.toFixed(0)}°`;
-  } else if (isHorizontal && elbowsExtended) {
-    isPushUp = true;
-    statusText = `PUSH-UP UP! Elbows:${avgElbowAngle.toFixed(0)}° Back:${avgBackAngle.toFixed(0)}°`;
-  } else if (isHorizontal) {
-    statusText = `Plank Position - Elbows:${avgElbowAngle.toFixed(0)}° Back:${avgBackAngle.toFixed(0)}°`;
-  } else {
-    statusText = `Standing/Not in position - Elbows:${avgElbowAngle.toFixed(0)}° Back:${avgBackAngle.toFixed(0)}°`;
+  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+  lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+
+  captureCanvas.toBlob(
+    (blob) => {
+      if (!blob) {
+        console.error("Failed to create blob from canvas.");
+        return;
+      }
+
+      const formData = new FormData();
+      
+      formData.append("repImage", blob, `rep_${repCount}.jpg`);
+      
+      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
+      formData.append("keypoints", JSON.stringify(keypoints));
+
+      formData.append("exercise", "pushup");  // ✅ This should be here
+      formData.append("repCount", repCount);
+      
+      // 🔍 ADD THIS DEBUG LOG to verify what's being sent:
+      console.log('📤 Sending to server:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
+      }
+
+      fetch('/api/infer', { 
+        method: 'POST',
+        body: formData 
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
+        return res.json();
+      })
+      .then(result => {
+        console.log('✅ Inference result (with image) received:', result);
+        info = {
+            ...result,
+            image_data: lastRepImageBase64 
+        }
+      })
+      .catch(err => console.error('Error posting data to infer:', err));
+    },
+    "image/jpeg",
+    0.9 
+  );
+}
+function renderLLMDebug(rawText, container) {
+  if (!rawText) return;
+
+  // Normalize and split into paragraphs
+  const text = String(rawText).trim();
+
+  // Simple markdown-like parsing rules
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const sectionNodes = [];
+  let current = { title: null, items: [], paragraphs: [] };
+
+  function pushCurrent() {
+    if (current.title || current.paragraphs.length || current.items.length) {
+      sectionNodes.push(current);
+      current = { title: null, items: [], paragraphs: [] };
+    }
   }
 
-  setPoseText(statusText);
+  for (let ln of lines) {
+    // Heading heuristics
+    if (/^(General Observations|Recommendations|To provide more precise|AI Analysis|Debug Information|General Observations & Potential Issues|Recommendations:)/i.test(ln)) {
+      pushCurrent();
+      current.title = ln.replace(/:$/,'');
+      continue;
+    }
+
+    // Numbered list
+    if (/^\d+\.\s+/.test(ln)) {
+      current.items.push(ln.replace(/^\d+\.\s+/, ''));
+      continue;
+    }
+
+    // Bullet list
+    if (/^[\*\-\u2022]\s+/.test(ln)) {
+      current.items.push(ln.replace(/^[\*\-\u2022]\s+/, ''));
+      continue;
+    }
+
+    // Inline strong/asterisk -> keep as-is and convert later
+    current.paragraphs.push(ln);
+  }
+  pushCurrent();
+
+  // Build DOM
+  container.innerHTML = ''; // clear
+  sectionNodes.forEach((sec, idx) => {
+    const section = document.createElement('section');
+    section.className = 'debug-block';
+
+    // Title + collapsible for long content
+    const titleText = sec.title || (idx === 0 ? 'Summary' : `Section ${idx+1}`);
+    const h = document.createElement('h4');
+    h.textContent = titleText;
+    section.appendChild(h);
+
+    // If many lines, make collapsible
+    const shouldCollapse = (sec.paragraphs.join(' ') + sec.items.join(' ')).length > 600;
+    const wrapper = shouldCollapse ? document.createElement('details') : document.createElement('div');
+    if (shouldCollapse) {
+      wrapper.className = 'debug-collapsible';
+      wrapper.open = false;
+      const summary = document.createElement('summary');
+      summary.textContent = 'Expand details';
+      wrapper.appendChild(summary);
+    }
+
+    // Paragraphs
+    sec.paragraphs.forEach(p => {
+      const pEl = document.createElement('p');
+      pEl.innerHTML = highlightInline(p);
+      wrapper.appendChild(pEl);
+    });
+
+    // Items (lists)
+    if (sec.items.length) {
+      // Decide between ordered/unordered by checking first original pattern (we treated both as items)
+      const ul = document.createElement('ul');
+      ul.className = 'debug-list';
+      sec.items.forEach(it => {
+        const li = document.createElement('li');
+        li.innerHTML = highlightInline(it);
+        ul.appendChild(li);
+      });
+      wrapper.appendChild(ul);
+    }
+
+    // If this is the raw debug payload block, add a raw dump toggle
+    if (/Debug Information|Debug Analysis/i.test(titleText)) {
+      const rawBtn = document.createElement('button');
+      rawBtn.type = 'button';
+      rawBtn.className = 'btn-raw';
+      rawBtn.textContent = 'View Raw Log';
+      rawBtn.addEventListener('click', () => {
+        const pre = document.createElement('pre');
+        pre.className = 'raw-dump';
+        pre.textContent = text;
+        pre.style.whiteSpace = 'pre-wrap';
+        if (!section.querySelector('.raw-dump')) section.appendChild(pre);
+        rawBtn.disabled = true;
+      });
+      section.appendChild(rawBtn);
+    }
+
+    // Append wrapper and section
+    section.appendChild(wrapper);
+    container.appendChild(section);
+  });
+
+  // Inline helper to highlight keypoint arrays and bold markers
+  function highlightInline(str) {
+    // Convert **bold** or __bold__
+    str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    str = str.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+    // Convert *italic*
+    str = str.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Highlight keypoint arrays like [25,26]
+    str = str.replace(/\[(\d+(?:,\s*\d+)*)\]/g, '<span class="kp">[$1]</span>');
+
+    // Emphasize measurements like 45 degree / 45°
+    str = str.replace(/(\d{1,3}\s?°|degree[s]?|degrees)/gi, '<span class="meta">$1</span>');
+
+    // Preserve simple dashes or bullets
+    return str;
+  }
 }
+//report 
+function createReport() {
+  const targetReps = parseInt(targetInput.value, 10);
+  const overlay = document.getElementById("overlay");
+  const content = document.getElementById("reportContent");
+
+  if (repCount < targetReps) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="font-size: 18px; color: var(--danger);">
+          You still need to complete ${targetReps - repCount} more reps to reach your target!
+        </p>
+        <p style="color: var(--muted);">
+          Current: ${repCount} / ${targetReps} reps
+        </p>
+      </div>
+    `;
+    overlay.style.display = "block";
+    return;
+  } 
+
+  // Clear previous content
+  content.innerHTML = ''; 
+
+    // Add image if available
+    if (info && info.image_data) {
+        const imageContainer = document.createElement("div");
+        imageContainer.className = "report-image-container";
+        
+        const img = document.createElement("img");
+        img.src = info.image_data;
+        img.alt = "Screenshot of your final push-up rep";
+        
+        imageContainer.appendChild(img);
+        content.appendChild(imageContainer);
+    }
+    if (info.debug) {
+        const debugSection = document.createElement('div');
+        debugSection.className = 'report-section';
+        debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
+        content.appendChild(debugSection);
+
+        const container = debugSection.querySelector('.debug-container');
+        renderLLMDebug(info.debug, container);
+    }else {
+        content.innerHTML = `
+        <div class="report-section">
+            <p style="color: var(--muted);">No AI feedback data available yet. Complete a rep to generate analysis.</p>
+        </div>
+        `;
+    }
+
+  overlay.style.display = "block";
+}
+
+// Close overlay function
+function closeOverlay() {
+  document.getElementById("overlay").style.display = "none";
+}
+
+// Event listeners
+const report = document.getElementById("detailedReportBtn");
+report.addEventListener("click", createReport);
+
+const close = document.getElementById('closeOverlay');
+close.addEventListener('click', closeOverlay);
+
+// Also close on overlay background click
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeOverlay();
+  }
+});
 
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {
   imageEl.style.cursor = "pointer";
   imageEl.addEventListener("click", async () => {
-    if (!poseLandmarkerImage) {
+  if (!poseLandmarkerImage) {
       console.warn("Image landmarker not ready yet.");
       return;
     }
