@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Plank Tower Challenge</title>
+  <style>
+    :root{--accent:#06b6d4;--bg:#0f172a;--card:#0b1220}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:#e6eef6;background:linear-gradient(180deg,#071024 0%,#071733 100%)}
+    .app{display:grid;grid-template-columns:420px 1fr;gap:18px;padding:18px;max-width:1200px;margin:18px auto}
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:12px;padding:14px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
+    .left{width:420px}
+    h1{margin:0 0 8px;font-size:20px}
+    p.small{margin:6px 0;color:#9fb0c8;font-size:13px}
+    #videoWrap{position:relative;border-radius:8px;overflow:hidden;background:#000;height:320px}
+    video, canvas#output{width:100%;height:320px;object-fit:cover;display:block}
+    .status{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+    .badge{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);font-weight:600}
+    .bigTimer{font-size:28px;font-weight:700;margin-top:8px}
+    .controls{display:flex;gap:8px;margin-top:12px}
+    button{background:var(--accent);color:#04202a;padding:8px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:700}
+    button:disabled{opacity:0.5;cursor:not-allowed}
+    .gameArea{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    #gameCanvas{background:linear-gradient(180deg,#e6f7ff 0%, #cfeefb 100%);width:100%;height:500px;border-radius:12px}
+    .hud{position:absolute;left:16px;top:16px;background:rgba(255,255,255,0.03);padding:8px;border-radius:8px}
+    .towerStats{display:flex;gap:12px}
+    .settings{margin-top:12px;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
+    label{display:block;font-size:13px;margin-top:6px}
+    input[type=range]{width:100%}
+    .footer{font-size:13px;color:#9fb0c8;margin-top:12px}
+    .movement-indicator{width:120px;height:120px;border:3px solid #06b6d4;border-radius:50%;position:relative;margin:10px auto;background:rgba(6,182,212,0.05)}
+    .movement-dot{width:20px;height:20px;background:#ef4444;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);transition:all 0.1s;box-shadow:0 0 10px rgba(0,0,0,0.3)}
+    .movement-dot.stable{background:#4CAF50}
+    .danger-zone{position:absolute;width:80%;height:80%;border:2px dashed #ff6b6b;border-radius:50%;top:10%;left:10%;opacity:0.3}
+    .life-bar{display:flex;gap:5px;margin-top:10px;justify-content:center}
+    .life{width:30px;height:10px;background:#4CAF50;border-radius:5px;transition:all 0.3s}
+    .life.lost{background:#333;transform:scale(0.8)}
+    .game-over-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:1000}
+    .game-over-content{background:white;padding:30px;border-radius:15px;text-align:center;color:#333}
+    .game-over-content h2{color:#ef4444;margin-bottom:20px}
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:20px 0}
+    .stat-box{padding:10px;background:#f0f0f0;border-radius:8px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="panel left">
+      <h1>Plank Tower Challenge</h1>
+      <p class="small">Keep a good plank position to build! Loose balance and it's game over!</p>
+
+      <div id="videoWrap">
+        <video id="video" playsinline></video>
+        <canvas id="output"></canvas>
+      </div>
+
+      <div class="movement-indicator">
+        <div class="danger-zone"></div>
+        <div class="movement-dot" id="movementDot"></div>
+      </div>
+
+      <div class="life-bar">
+        <div class="life" id="life1"></div>
+        <div class="life" id="life2"></div>
+        <div class="life" id="life3"></div>
+      </div>
+
+      <div class="status">
+        <div class="badge" id="stabilityBadge">Stability: —</div>
+        <div class="badge">Combo: <span id="combo">0</span>x</div>
+        <div class="badge">Time: <span id="gameTime">0s</span></div>
+      </div>
+
+      <div class="bigTimer">Tower: <strong id="towerHeight">0</strong> blocks</div>
+
+      <div class="controls">
+        <button id="startBtn">Start Game</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+
+      <div class="settings">
+        <label>Difficulty: 
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="footer">Keep the green dot in the center. Red zone = danger!</div>
+    </div>
+
+    <div class="panel gameArea">
+      <div style="width:100%">
+        <canvas id="gameCanvas" width="800" height="720"></canvas>
+      </div>
+      <div class="hud">
+        <div class="towerStats">
+          <div>Score: <strong id="score">0</strong></div>
+          <div>High Score: <strong id="highScore">0</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div class="game-over-overlay" id="gameOverOverlay">
+    <div class="game-over-content">
+      <h2>GAME OVER!</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <strong>Final Score</strong>
+          <div id="finalScore">0</div>
+        </div>
+        <div class="stat-box">
+          <strong>Tower Height</strong>
+          <div id="finalHeight">0</div>
+        </div>
+        <div class="stat-box">
+          <strong>Time Survived</strong>
+          <div id="finalTime">0s</div>
+        </div>
+        <div class="stat-box">
+          <strong>Best Combo</strong>
+          <div id="finalCombo">0x</div>
+        </div>
+      </div>
+      <button onclick="closeGameOver()">Play Again</button>
+    </div>
+  </div>
+
+  <!-- MediaPipe Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+
+  <script>
+  // Game State
+  const GAME_STATES = {
+    MENU: 'menu',
+    PLAYING: 'playing',
+    PAUSED: 'paused',
+    GAME_OVER: 'game_over'
+  };
+
+  let gameState = GAME_STATES.MENU;
+  let lives = 3;
+  let combo = 0;
+  let maxCombo = 0;
+  let gameStartTime = null;
+  let score = 0;
+  let highScore = localStorage.getItem('towerHighScore') || 0;
+  let towerBlocks = 0;
+  let outOfBoundsTime = 0;
+  let lastStableTime = Date.now();
+
+  // Difficulty settings
+  const DIFFICULTY = {
+    easy: { sensitivity: 25, maxOut: 60, buildSpeed: 1.2, penaltySpeed: 0.5 },
+    medium: { sensitivity: 20, maxOut: 40, buildSpeed: 1.0, penaltySpeed: 1.0 },
+    hard: { sensitivity: 15, maxOut: 20, buildSpeed: 0.8, penaltySpeed: 1.5 }
+  };
+
+  // Camera and tracking
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('output');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 420; 
+  canvas.height = 320;
+
+  let calibratedPosition = null;
+  let lastNosePosition = null;
+  let isStable = false;
+  let buildAccumulation = 0;
+
+  // UI Elements
+  const stabilityBadge = document.getElementById('stabilityBadge');
+  const comboEl = document.getElementById('combo');
+  const gameTimeEl = document.getElementById('gameTime');
+  const scoreEl = document.getElementById('score');
+  const highScoreEl = document.getElementById('highScore');
+  const towerHeightEl = document.getElementById('towerHeight');
+  const movementDot = document.getElementById('movementDot');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+
+  highScoreEl.textContent = highScore;
+
+  // Game Canvas
+  const gCanvas = document.getElementById('gameCanvas');
+  const gCtx = gCanvas.getContext('2d');
+  let fallingBlocks = [];
+  let particles = [];
+  let shakeAmount = 0;
+
+  // Initialize
+  function init() {
+    drawTower();
+  }
+
+  // Game Over
+  function gameOver() {
+    if(gameState === GAME_STATES.GAME_OVER) return;
+    
+    gameState = GAME_STATES.GAME_OVER;
+    
+    // Update high score
+    if(score > highScore) {
+      highScore = score;
+      localStorage.setItem('towerHighScore', highScore);
+      highScoreEl.textContent = highScore;
+    }
+    
+    // Show game over screen
+    const gameTime = gameStartTime ? Math.floor((Date.now() - gameStartTime) / 1000) : 0;
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('finalHeight').textContent = towerBlocks;
+    document.getElementById('finalTime').textContent = gameTime + 's';
+    document.getElementById('finalCombo').textContent = maxCombo + 'x';
+    gameOverOverlay.style.display = 'flex';
+    
+    // Make all blocks fall
+    for(let i = 0; i < towerBlocks; i++) {
+      setTimeout(() => {
+        const block = {
+          x: gCanvas.width/2 - 40 + Math.random()*20 - 10,
+          y: gCanvas.height - (towerBlocks-i)*28 - 80,
+          w: 80,
+          h: 24,
+          vy: -100,
+          vx: (Math.random() - 0.5) * 200,
+          color: '#ef4444'
+        };
+        fallingBlocks.push(block);
+      }, i * 50);
+    }
+    
+    document.getElementById('startBtn').textContent = 'Start Game';
+    document.getElementById('startBtn').disabled = false;
+  }
+
+  function closeGameOver() {
+    gameOverOverlay.style.display = 'none';
+    resetGame();
+  }
+
+  // Add block with combo bonus
+  function addBlock() {
+    towerBlocks += 1;
+    combo += 1;
+    maxCombo = Math.max(maxCombo, combo);
+    
+    // Score with combo multiplier
+    const points = 10 + (combo * 2);
+    score += points;
+    
+    // Create particle effect
+    for(let i = 0; i < 5; i++) {
+      particles.push({
+        x: gCanvas.width/2 + (Math.random() - 0.5) * 100,
+        y: gCanvas.height - towerBlocks * 28 - 80,
+        vx: (Math.random() - 0.5) * 100,
+        vy: -Math.random() * 200,
+        life: 1.0,
+        color: `hsl(${180 + combo * 10}, 70%, 50%)`
+      });
+    }
+    
+    updateUI();
+  }
+
+  // Lose life and remove blocks
+  function loseLife() {
+    lives -= 1;
+    combo = 0;
+    shakeAmount = 20;
+    
+    // Update life display
+    for(let i = 1; i <= 3; i++) {
+      document.getElementById(`life${i}`).className = i <= lives ? 'life' : 'life lost';
+    }
+    
+    // Remove some blocks
+    const blocksToRemove = Math.min(3, towerBlocks);
+    for(let i = 0; i < blocksToRemove; i++) {
+      if(towerBlocks > 0) {
+        towerBlocks -= 1;
+        const block = {
+          x: gCanvas.width/2 - 40 + Math.random()*20 - 10,
+          y: gCanvas.height - (towerBlocks+1)*28 - 80,
+          w: 80,
+          h: 24,
+          vy: -200,
+          vx: (Math.random() - 0.5) * 300,
+          color: '#ef4444'
+        };
+        fallingBlocks.push(block);
+      }
+    }
+    
+    if(lives <= 0) {
+      gameOver();
+    }
+    
+    updateUI();
+  }
+
+  function updateUI() {
+    towerHeightEl.textContent = towerBlocks;
+    scoreEl.textContent = score;
+    comboEl.textContent = combo;
+  }
+
+  // Draw game
+  function drawTower() {
+    // Clear
+    gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
+    
+    // Apply shake
+    if(shakeAmount > 0) {
+      gCtx.save();
+      gCtx.translate((Math.random() - 0.5) * shakeAmount, (Math.random() - 0.5) * shakeAmount);
+      shakeAmount *= 0.9;
+    }
+    
+    // Draw sky
+    gCtx.fillStyle = 'rgba(255,255,255,0.1)';
+    gCtx.beginPath();
+    gCtx.arc(100, 100, 40, 0, Math.PI * 2);
+    gCtx.arc(150, 100, 50, 0, Math.PI * 2);
+    gCtx.arc(200, 100, 40, 0, Math.PI * 2);
+    gCtx.fill();
+    
+    // Draw ground
+    gCtx.fillStyle = '#4b5563';
+    gCtx.fillRect(0, gCanvas.height-60, gCanvas.width, 60);
+    
+    // Platform
+    gCtx.fillStyle = '#334155';
+    gCtx.fillRect(gCanvas.width/2 - 140, gCanvas.height-80, 280, 20);
+    
+    // Draw tower blocks
+    for(let i = 0; i < towerBlocks; i++) {
+      const wobble = !isStable ? Math.sin(Date.now() * 0.01 + i * 0.5) * 2 : 0;
+      const bx = gCanvas.width/2 - 40 + wobble;
+      const by = gCanvas.height - 80 - (i+1)*28;
+      
+      // Color based on combo
+      const hue = 180 + (combo * 10) % 180;
+      gCtx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+      gCtx.fillRect(bx, by, 80, 24);
+      gCtx.strokeStyle = 'rgba(0,0,0,0.2)';
+      gCtx.strokeRect(bx, by, 80, 24);
+    }
+    
+    // Draw particles
+    particles = particles.filter(p => {
+      p.x += p.vx * 0.016;
+      p.y += p.vy * 0.016;
+      p.vy += 500 * 0.016;
+      p.life -= 0.02;
+      
+      if(p.life > 0) {
+        gCtx.globalAlpha = p.life;
+        gCtx.fillStyle = p.color;
+        gCtx.fillRect(p.x, p.y, 5, 5);
+        gCtx.globalAlpha = 1;
+        return true;
+      }
+      return false;
+    });
+    
+    // Draw falling blocks
+    fallingBlocks = fallingBlocks.filter(b => {
+      b.vy += 900 * 0.016;
+      b.y += b.vy * 0.016;
+      b.x += b.vx * 0.016;
+      
+      if(b.y < gCanvas.height) {
+        gCtx.fillStyle = b.color || '#ef4444';
+        gCtx.fillRect(b.x, b.y, b.w, b.h);
+        return true;
+      }
+      return false;
+    });
+    
+    if(shakeAmount > 0) {
+      gCtx.restore();
+    }
+  }
+
+  // Game loop
+  function gameLoop() {
+    drawTower();
+    
+    // Update game time
+    if(gameState === GAME_STATES.PLAYING && gameStartTime) {
+      const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+      gameTimeEl.textContent = elapsed + 's';
+    }
+    
+    requestAnimationFrame(gameLoop);
+  }
+  gameLoop();
+
+  // MediaPipe Setup
+  const pose = new Pose({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+  });
+  
+  pose.setOptions({
+    modelComplexity: 0,
+    smoothLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+  
+  pose.onResults(onResults);
+
+  let cam;
+  async function startCamera() {
+    cam = new Camera(video, {
+      onFrame: async() => { 
+        await pose.send({image: video}); 
+      },
+      width: 640, 
+      height: 480
+    });
+    cam.start();
+  }
+
+  function onResults(results) {
+    // Draw video
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+    if(results.poseLandmarks && gameState === GAME_STATES.PLAYING) {
+      const nose = results.poseLandmarks[0];
+      
+      // Draw nose point
+      ctx.fillStyle = isStable ? '#00ff00' : '#ff0000';
+      ctx.beginPath();
+      ctx.arc(nose.x * canvas.width, nose.y * canvas.height, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      const currentNosePos = {
+        x: nose.x * canvas.width,
+        y: nose.y * canvas.height
+      };
+
+      // Calibrate on first detection
+      if(!calibratedPosition) {
+        calibratedPosition = {...currentNosePos};
+        lastNosePosition = {...currentNosePos};
+      }
+
+      // Check position and stability
+      const difficulty = DIFFICULTY[document.getElementById('difficulty').value];
+      const dx = currentNosePos.x - calibratedPosition.x;
+      const dy = currentNosePos.y - calibratedPosition.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Update movement indicator
+      const maxDist = 50;
+      const relX = Math.min(maxDist, Math.max(-maxDist, dx));
+      const relY = Math.min(maxDist, Math.max(-maxDist, dy));
+      movementDot.style.transform = `translate(calc(-50% + ${relX}px), calc(-50% + ${relY}px))`;
+      
+      // Check if out of bounds
+      const outOfBounds = distance > difficulty.maxOut;
+      isStable = distance < difficulty.sensitivity;
+      
+      movementDot.className = isStable ? 'movement-dot stable' : 'movement-dot';
+      stabilityBadge.textContent = outOfBounds ? 'OUT OF BOUNDS!' : (isStable ? 'STABLE' : 'UNSTABLE');
+      stabilityBadge.style.background = outOfBounds ? '#ef4444' : (isStable ? '#06b6d4' : '#ff9800');
+      
+      // Game mechanics
+      if(outOfBounds) {
+        outOfBoundsTime += 16; // ~1 frame
+        if(outOfBoundsTime > 500) { // 0.5 seconds out of bounds
+          loseLife();
+          outOfBoundsTime = 0;
+          calibratedPosition = {...currentNosePos}; // Recalibrate
+        }
+      } else {
+        outOfBoundsTime = 0;
+        
+        if(isStable) {
+          lastStableTime = Date.now();
+          buildAccumulation += difficulty.buildSpeed * 0.02;
+          if(buildAccumulation >= 1) {
+            addBlock();
+            buildAccumulation = 0;
+          }
+        } else {
+          // Lose combo if unstable for too long
+          if(Date.now() - lastStableTime > 2000) {
+            combo = 0;
+            comboEl.textContent = combo;
+          }
+        }
+      }
+      
+      lastNosePosition = {...currentNosePos};
+    }
+    ctx.restore();
+  }
+
+  // Controls
+  document.getElementById('startBtn').addEventListener('click', async () => {
+    if(gameState === GAME_STATES.MENU || gameState === GAME_STATES.GAME_OVER) {
+      resetGame();
+      gameState = GAME_STATES.PLAYING;
+      gameStartTime = Date.now();
+      document.getElementById('startBtn').textContent = 'Pause';
+      document.getElementById('startBtn').disabled = true;
+      if(!cam) await startCamera();
+      
+      // Reset calibration for new game
+      calibratedPosition = null;
+      
+    } else if(gameState === GAME_STATES.PLAYING) {
+      gameState = GAME_STATES.PAUSED;
+      document.getElementById('startBtn').textContent = 'Resume';
+    } else if(gameState === GAME_STATES.PAUSED) {
+      gameState = GAME_STATES.PLAYING;
+      document.getElementById('startBtn').textContent = 'Pause';
+    }
+  });
+
+  function resetGame() {
+    gameState = GAME_STATES.MENU;
+    lives = 3;
+    combo = 0;
+    maxCombo = 0;
+    score = 0;
+    towerBlocks = 0;
+    buildAccumulation = 0;
+    fallingBlocks = [];
+    particles = [];
+    outOfBoundsTime = 0;
+    calibratedPosition = null;
+    gameStartTime = null;
+    
+    // Reset UI
+    for(let i = 1; i <= 3; i++) {
+      document.getElementById(`life${i}`).className = 'life';
+    }
+    updateUI();
+    gameTimeEl.textContent = '0s';
+    document.getElementById('startBtn').textContent = 'Start Game';
+    document.getElementById('startBtn').disabled = false;
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+  // Initialize
+  init();
+  </script>
+</body>
+</html>
