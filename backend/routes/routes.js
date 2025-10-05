@@ -1,22 +1,61 @@
-// backend/routes/routes.js - SIMPLE VERSION THAT WORKS
+// backend/routes/routes.js - WITH RATE LIMITING
 const express = require('express');
 const router = express.Router();
-const multer = require('multer'); // 👈 ADD THIS
+const multer = require('multer');
 require('dotenv').config();
 
-const upload = multer({ storage: multer.memoryStorage() }); // 👈 ADD THIS
+const upload = multer({ storage: multer.memoryStorage() });
 
-const GEMINI_API_KEY =  process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// 👇 RATE LIMITING: Track API calls per minute
+const rateLimitMap = new Map(); // Stores { timestamp: count }
+const MAX_CALLS_PER_MINUTE = 2;
+const TIME_WINDOW = 60000; // 1 minute in milliseconds
+
+function checkRateLimit() {
+  const now = Date.now();
+  const oneMinuteAgo = now - TIME_WINDOW;
+  
+  // Clean up old entries
+  for (const [timestamp] of rateLimitMap) {
+    if (timestamp < oneMinuteAgo) {
+      rateLimitMap.delete(timestamp);
+    }
+  }
+  
+  // Count calls in the last minute
+  let callCount = 0;
+  for (const count of rateLimitMap.values()) {
+    callCount += count;
+  }
+  
+  // Check if limit exceeded
+  if (callCount >= MAX_CALLS_PER_MINUTE) {
+    return false; // Rate limit exceeded
+  }
+  
+  // Add this call to the tracker
+  rateLimitMap.set(now, 1);
+  return true; // OK to proceed
+}
 
 router.post('/infer', upload.single('repImage'), async (req, res) => { 
-  try {
+  try {
+    // 👇 CHECK RATE LIMIT FIRST
+    if (!checkRateLimit()) {
+      console.log('⏱️ Rate limit exceeded');
+      return res.status(429).json({
+        score: 0,
+        corrections: ['Too many requests'],
+        rationale: ['Rate limit: Maximum 5 API calls per minute. Please wait and try again.'],
+        safety_flag: 'RateLimited'
+      });
+    }
 
-    const repImage = req.file; // The image file is here
+    const repImage = req.file;
     const { exercise, keypoints, repCount } = req.body || {}; 
     
-
-      // ⚠️ CHANGE: Check for image, exercise, and keypoints
-  // Better validation that checks for actual missing data
     if (!repImage || !exercise || !keypoints) {
       console.log('❌ Validation failed - missing required fields');
       return res.json({
@@ -31,7 +70,6 @@ router.post('/infer', upload.single('repImage'), async (req, res) => {
     try {
       parsedKeypoints = JSON.parse(keypoints);
       
-      // Check if it's actually an array with data
       if (!Array.isArray(parsedKeypoints) || parsedKeypoints.length === 0) {
         throw new Error('Keypoints array is empty');
       }
@@ -48,10 +86,7 @@ router.post('/infer', upload.single('repImage'), async (req, res) => {
     console.log(`Received image: ${repImage.originalname}, size: ${repImage.size} bytes`);
     console.log(`Received exercise: ${exercise}, Rep: ${repCount}`);
     
-    // In a real application, you would calculate angles from parsedKeypoints here
-    // For now, we will use the keypoints array directly in the prompt
-    
-    const prompt = `You are a physical therapy coach analyzing form.
+    const prompt = `You are a physical therapy coach analyzing form.
     Exercise: ${exercise}
     Keypoints measured for the completed rep: ${JSON.stringify(parsedKeypoints, null, 2)}
     ... (rest of your existing prompt structure) ...`;
@@ -83,7 +118,6 @@ router.post('/infer', upload.single('repImage'), async (req, res) => {
     const data = await response.json();
     console.log('Full API response:', JSON.stringify(data, null, 2));
 
-    // Extract the text from Gemini's response
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!text) {
@@ -97,11 +131,9 @@ router.post('/infer', upload.single('repImage'), async (req, res) => {
 
     console.log('Model output:', text);
 
-    // Clean up the text (remove markdown if present)
     let cleanText = text.trim();
     cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
 
-    // Find JSON object in the text
     const jsonStart = cleanText.indexOf('{');
     const jsonEnd = cleanText.lastIndexOf('}');
     
@@ -118,7 +150,6 @@ router.post('/infer', upload.single('repImage'), async (req, res) => {
     const jsonStr = cleanText.substring(jsonStart, jsonEnd + 1);
     const result = JSON.parse(jsonStr);
 
-    // Make sure all required fields exist
     const finalResult = {
       score: result.score || 0,
       corrections: result.corrections || ['No corrections provided'],

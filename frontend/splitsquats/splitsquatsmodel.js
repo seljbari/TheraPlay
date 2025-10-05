@@ -209,9 +209,36 @@ async function predictWebcam() {
   }
 }
 
+// Add these state variables
+let info = null;
+let lastRepImageBase64 = null;
+let isAnalyzing = false;
 let lastPose = "up";
 let repCount = 0;
-const targetInput = document.getElementById("targetReps");
+
+// Function to update all rep displays
+function updateRepDisplay() {
+    const repsDisplay = document.getElementById("repsDisplay");
+    const repsCount = document.getElementById("repsCount");
+    
+    if (repsDisplay) repsDisplay.textContent = repCount;
+    if (repsCount) repsCount.textContent = repCount;
+    
+    // Update report button status
+    const reportBtn = document.getElementById("detailedReportBtn");
+    if (reportBtn) {
+        if (isAnalyzing) {
+            reportBtn.textContent = "⏳ Analyzing...";
+            reportBtn.disabled = true;
+        } else if (info && info.debug) {
+            reportBtn.textContent = "✓ View AI Report";
+            reportBtn.disabled = false;
+        } else {
+            reportBtn.textContent = "Detailed Report";
+            reportBtn.disabled = false;
+        }
+    }
+}
 
 function processAndDisplayPose(landmarks) {
     const leftShoulder = landmarks[11];
@@ -231,12 +258,10 @@ function processAndDisplayPose(landmarks) {
     const leftHipAngle = getAngle(leftShoulder, leftHip, leftKnee);
     const rightHipAngle = getAngle(rightShoulder, rightHip, rightKnee);
 
-    // Determine which leg is forward (front leg will have knee more bent in split squat position)
-    // Front leg should be bent more during the down position
+    // Determine which leg is forward
     let frontKneeAngle, backKneeAngle, frontHipAngle, backHipAngle;
     let frontSide, backSide;
     
-    // Detect split stance by ankle position (front foot will be further forward in z-depth or x-position)
     const isLeftFootForward = leftAnkle.z < rightAnkle.z || leftAnkle.x < rightAnkle.x;
     
     if (isLeftFootForward) {
@@ -267,12 +292,9 @@ function processAndDisplayPose(landmarks) {
 
     // Split squat detection criteria
     const isSplitStance = Math.abs(leftAnkle.z - rightAnkle.z) > 0.1 || Math.abs(leftAnkle.x - rightAnkle.x) > 0.15;
-    const isTorsoUpright = (leftHipAngle + rightHipAngle) / 2 > 150; // Torso should be relatively upright
+    const isTorsoUpright = (leftHipAngle + rightHipAngle) / 2 > 150;
     
-    // Down position: front knee bent (70-110 degrees)
     const isDown = frontKneeAngle < 110 && frontKneeAngle > 70;
-    
-    // Up position: front knee extended (140+ degrees)
     const isUp = frontKneeAngle > 140;
 
     let statusText = "";
@@ -280,10 +302,13 @@ function processAndDisplayPose(landmarks) {
     if (isSplitStance && isTorsoUpright) {
         if (isDown) {
             statusText = `SPLIT SQUAT DOWN! (${frontSide} LEG FORWARD)`;
-            if (lastPose !== "down") {
-                lastPose = "down";
-                console.log("📍 Down position detected");
+            
+            // Capture image at the bottom position
+            if (lastPose === "up") {
+                captureRepImage(landmarks);
             }
+            
+            lastPose = "down";
         } else if (isUp) {
             statusText = `SPLIT SQUAT UP! (${frontSide} LEG FORWARD)`;
 
@@ -291,14 +316,8 @@ function processAndDisplayPose(landmarks) {
                 repCount++;
                 console.log("✅ Rep completed:", repCount);
                 
-                // Update both display elements
-                const repsDisplayEl = document.getElementById("repsDisplay");
-                const repsCountEl = document.getElementById("repsCount");
-                
-                if (repsDisplayEl) repsDisplayEl.textContent = repCount;
-                if (repsCountEl) repsCountEl.textContent = repCount;
-
-                sendRepDataWithImage(landmarks);
+                // Update rep displays immediately
+                updateRepDisplay();
             }
 
             lastPose = "up";
@@ -314,69 +333,89 @@ function processAndDisplayPose(landmarks) {
     setPoseText(`${statusText} | Reps: ${repCount}`);
 }
 
-let info;
-let lastRepImageBase64 = null;
+// Just capture the image, don't send to API yet
+function captureRepImage(landmarks) {
+    const captureCanvas = document.createElement("canvas");
+    captureCanvas.width = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    const captureCtx = captureCanvas.getContext("2d");
 
-function sendRepDataWithImage(landmarks) {
-  const captureCanvas = document.createElement("canvas");
-  captureCanvas.width = video.videoWidth;
-  captureCanvas.height = video.videoHeight;
-  const captureCtx = captureCanvas.getContext("2d");
-
-  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-  lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
-
-  captureCanvas.toBlob(
-    (blob) => {
-      if (!blob) {
-        console.error("Failed to create blob from canvas.");
-        return;
-      }
-
-      const formData = new FormData();
-      
-      formData.append("repImage", blob, `rep_${repCount}.jpg`);
-      
-      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
-      formData.append("keypoints", JSON.stringify(keypoints));
-
-      formData.append("exercise", "splitsquat");
-      formData.append("repCount", repCount);
-      
-      console.log('📤 Sending to server:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
-      }
-
-      fetch('/api/infer', { 
-        method: 'POST',
-        body: formData 
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
-        return res.json();
-      })
-      .then(result => {
-        console.log('✅ Inference result (with image) received:', result);
-        info = {
-            ...result,
-            image_data: lastRepImageBase64 
-        }
-      })
-      .catch(err => console.error('Error posting data to infer:', err));
-    },
-    "image/jpeg",
-    0.9 
-  );
+    captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+    
+    // Store the landmarks for later analysis
+    window.lastLandmarks = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
 }
-document.getElementById("resetSessionBtn").addEventListener("click", () => {
-    repCount = 0;
-    lastPose = "up";
-    document.getElementById("repsDisplay").textContent = repCount;
-    document.getElementById("repsCount").textContent = repCount;
-    setPoseText("");
-    console.log("Session reset");
-});
+
+// Only send to API when user clicks "Detailed Report"
+function sendRepDataToAPI() {
+    if (!lastRepImageBase64 || !window.lastLandmarks) {
+        console.error("No image or landmarks captured");
+        return Promise.reject("No data to analyze");
+    }
+
+    isAnalyzing = true;
+    updateRepDisplay();
+
+    // Convert base64 back to blob
+    return fetch(lastRepImageBase64)
+        .then(res => res.blob())
+        .then(blob => {
+            const formData = new FormData();
+            formData.append("repImage", blob, `rep_${repCount}.jpg`);
+            formData.append("keypoints", JSON.stringify(window.lastLandmarks));
+            formData.append("exercise", "splitsquat");
+            formData.append("repCount", repCount);
+
+            console.log('📤 Sending to server for analysis...');
+
+            return fetch('/api/infer', { 
+                method: 'POST',
+                body: formData 
+            });
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`Server responded with status: ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(result => {
+            console.log('✅ Inference result received:', result);
+            
+            info = {
+                ...result,
+                image_data: lastRepImageBase64 
+            };
+            
+            isAnalyzing = false;
+            updateRepDisplay();
+            
+            return info;
+        })
+        .catch(err => {
+            console.error('❌ Error posting data to infer:', err);
+            isAnalyzing = false;
+            updateRepDisplay();
+            throw err;
+        });
+}
+
+// Reset session button
+const resetBtn = document.getElementById("resetSessionBtn");
+if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+        repCount = 0;
+        lastPose = "up";
+        info = null;
+        lastRepImageBase64 = null;
+        window.lastLandmarks = null;
+        updateRepDisplay();
+        setPoseText("");
+        console.log("Session reset");
+    });
+}
+
 function renderLLMDebug(rawText, container) {
   if (!rawText) return;
 
@@ -482,7 +521,8 @@ function renderLLMDebug(rawText, container) {
 }
 
 function createReport() {
-  const targetReps = parseInt(targetInput.value, 10);
+  const targetInput = document.getElementById("targetReps");
+  const targetReps = parseInt(targetInput?.value || 0, 10);
   const overlay = document.getElementById("overlay");
   const content = document.getElementById("reportContent");
 
@@ -499,11 +539,39 @@ function createReport() {
     `;
     overlay.style.display = "block";
     return;
-  } 
+  }
 
-  content.innerHTML = ''; 
+  if (repCount === 0) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="color: var(--muted);">Complete some reps first to generate a report!</p>
+      </div>
+    `;
+    overlay.style.display = "block";
+    return;
+  }
 
-    if (info && info.image_data) {
+  // Show "analyzing" message first
+  content.innerHTML = `
+    <div class="report-section">
+      <p style="font-size: 18px; color: var(--primary);">
+        ⏳ AI is analyzing your form...
+      </p>
+      <p style="color: var(--muted);">
+        Please wait a moment.
+      </p>
+    </div>
+  `;
+  overlay.style.display = "block";
+
+  // Send to API NOW (only when button is clicked)
+  sendRepDataToAPI()
+    .then(() => {
+      // Clear and rebuild with results
+      content.innerHTML = '';
+
+      // Add image
+      if (info && info.image_data) {
         const imageContainer = document.createElement("div");
         imageContainer.className = "report-image-container";
         
@@ -513,9 +581,10 @@ function createReport() {
         
         imageContainer.appendChild(img);
         content.appendChild(imageContainer);
-    }
-    
-    if (info.debug) {
+      }
+
+      // Add AI feedback
+      if (info && info.debug) {
         const debugSection = document.createElement('div');
         debugSection.className = 'report-section';
         debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
@@ -523,38 +592,59 @@ function createReport() {
 
         const container = debugSection.querySelector('.debug-container');
         renderLLMDebug(info.debug, container);
-    } else {
-        content.innerHTML = `
-        <div class="report-section">
-            <p style="color: var(--muted);">No AI feedback data available yet. Complete a rep to generate analysis.</p>
-        </div>
+      } else if (info) {
+        const basicSection = document.createElement('div');
+        basicSection.className = 'report-section';
+        basicSection.innerHTML = `
+          <h3>Analysis Results</h3>
+          <p><strong>Score:</strong> ${info.score || 'N/A'}/100</p>
+          <p><strong>Corrections:</strong> ${(info.corrections || []).join(', ') || 'None'}</p>
+          <p><strong>Rationale:</strong> ${(info.rationale || []).join(' ') || 'N/A'}</p>
         `;
-    }
-
-  overlay.style.display = "block";
+        content.appendChild(basicSection);
+      }
+    })
+    .catch(err => {
+      content.innerHTML = `
+        <div class="report-section">
+          <p style="color: var(--danger);">Failed to analyze: ${err.message || err}</p>
+          <p style="color: var(--muted);">Please try again.</p>
+        </div>
+      `;
+    });
 }
 
+// Close overlay function
 function closeOverlay() {
   document.getElementById("overlay").style.display = "none";
 }
 
+// Event listeners
 const report = document.getElementById("detailedReportBtn");
-report.addEventListener("click", createReport);
+if (report) {
+  report.addEventListener("click", createReport);
+}
 
 const close = document.getElementById('closeOverlay');
-close.addEventListener('click', closeOverlay);
+if (close) {
+  close.addEventListener('click', closeOverlay);
+}
 
-document.getElementById('overlay').addEventListener('click', function(e) {
-  if (e.target === this) {
-    closeOverlay();
-  }
-});
+// Close on overlay background click
+const overlay = document.getElementById('overlay');
+if (overlay) {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeOverlay();
+    }
+  });
+}
 
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {
   imageEl.style.cursor = "pointer";
   imageEl.addEventListener("click", async () => {
-  if (!poseLandmarkerImage) {
+    if (!poseLandmarkerImage) {
       console.warn("Image landmarker not ready yet.");
       return;
     }

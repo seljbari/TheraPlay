@@ -209,9 +209,105 @@ async function predictWebcam() {
   }
 }
 
+// State variables
 let lastPose = "up";
 let repCount = 0;
 const targetInput = document.getElementById("targetReps");
+let isAnalyzing = false;
+let info = null;
+let lastRepImageBase64 = null;
+
+// Just capture the image, don't send to API yet
+function captureRepImage(landmarks) {
+    const captureCanvas = document.createElement("canvas");
+    captureCanvas.width = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    const captureCtx = captureCanvas.getContext("2d");
+
+    captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+    
+    // Store the landmarks for later analysis
+    window.lastLandmarks = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
+}
+
+// Only send to API when user clicks "Detailed Report"
+function sendRepDataToAPI() {
+    if (!lastRepImageBase64 || !window.lastLandmarks) {
+        console.error("No image or landmarks captured");
+        return Promise.reject("No data to analyze");
+    }
+
+    isAnalyzing = true;
+    updateRepDisplay();
+
+    // Convert base64 back to blob
+    return fetch(lastRepImageBase64)
+        .then(res => res.blob())
+        .then(blob => {
+            const formData = new FormData();
+            formData.append("repImage", blob, `rep_${repCount}.jpg`);
+            formData.append("keypoints", JSON.stringify(window.lastLandmarks));
+            formData.append("exercise", "squat");
+            formData.append("repCount", repCount);
+
+            console.log('📤 Sending to server for analysis...');
+
+            return fetch('/api/infer', { 
+                method: 'POST',
+                body: formData 
+            });
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`Server responded with status: ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(result => {
+            console.log('✅ Inference result received:', result);
+            
+            info = {
+                ...result,
+                image_data: lastRepImageBase64 
+            };
+            
+            isAnalyzing = false;
+            updateRepDisplay();
+            
+            return info;
+        })
+        .catch(err => {
+            console.error('❌ Error posting data to infer:', err);
+            isAnalyzing = false;
+            updateRepDisplay();
+            throw err;
+        });
+}
+
+// Function to update all rep displays
+function updateRepDisplay() {
+    const repsDisplay = document.getElementById("repsDisplay");
+    const repsCount = document.getElementById("repsCount");
+    
+    if (repsDisplay) repsDisplay.textContent = repCount;
+    if (repsCount) repsCount.textContent = repCount;
+    
+    // Update report button status
+    const reportBtn = document.getElementById("detailedReportBtn");
+    if (reportBtn) {
+        if (isAnalyzing) {
+            reportBtn.textContent = "⏳ Analyzing...";
+            reportBtn.disabled = true;
+        } else if (info && info.debug) {
+            reportBtn.textContent = "✓ View AI Report";
+            reportBtn.disabled = false;
+        } else {
+            reportBtn.textContent = "Detailed Report";
+            reportBtn.disabled = false;
+        }
+    }
+}
 
 function processAndDisplayPose(landmarks) {
   const leftShoulder = landmarks[11];
@@ -243,6 +339,12 @@ function processAndDisplayPose(landmarks) {
 
   if (isDeepSquat) {
     statusText = "SQUAT DOWN!";
+    
+    // Capture image at the bottom position (most important for form check)
+    if (lastPose === "up") {
+      captureRepImage(landmarks);
+    }
+    
     lastPose = "down";
   } else if (isStanding) {
     statusText = "SQUAT UP!";
@@ -251,13 +353,8 @@ function processAndDisplayPose(landmarks) {
       repCount++;
       console.log("✅ Rep completed:", repCount);
       
-      // Update the display
-      const repsDisplay = document.getElementById("repsDisplay");
-      const repsCount = document.getElementById("repsCount");
-      if (repsDisplay) repsDisplay.textContent = repCount;
-      if (repsCount) repsCount.textContent = repCount;
-      
-      sendRepDataWithImage(landmarks);
+      // Update rep displays immediately
+      updateRepDisplay();
     }
 
     lastPose = "up";
@@ -266,62 +363,6 @@ function processAndDisplayPose(landmarks) {
   }
 
   setPoseText(`${statusText} | Reps: ${repCount}`);
-}
-
-let info;
-let lastRepImageBase64 = null;
-
-function sendRepDataWithImage(landmarks) {
-  const captureCanvas = document.createElement("canvas");
-  captureCanvas.width = video.videoWidth;
-  captureCanvas.height = video.videoHeight;
-  const captureCtx = captureCanvas.getContext("2d");
-
-  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-  lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
-
-  captureCanvas.toBlob(
-    (blob) => {
-      if (!blob) {
-        console.error("Failed to create blob from canvas.");
-        return;
-      }
-
-      const formData = new FormData();
-      
-      formData.append("repImage", blob, `rep_${repCount}.jpg`);
-      
-      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
-      formData.append("keypoints", JSON.stringify(keypoints));
-
-      formData.append("exercise", "squat");
-      formData.append("repCount", repCount);
-      
-      console.log('📤 Sending to server:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
-      }
-
-      fetch('/api/infer', { 
-        method: 'POST',
-        body: formData 
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
-        return res.json();
-      })
-      .then(result => {
-        console.log('✅ Inference result (with image) received:', result);
-        info = {
-            ...result,
-            image_data: lastRepImageBase64 
-        }
-      })
-      .catch(err => console.error('Error posting data to infer:', err));
-    },
-    "image/jpeg",
-    0.9 
-  );
 }
 
 function renderLLMDebug(rawText, container) {
@@ -429,7 +470,7 @@ function renderLLMDebug(rawText, container) {
 }
 
 function createReport() {
-  const targetReps = parseInt(targetInput.value, 10);
+  const targetReps = parseInt(targetInput?.value || 0, 10);
   const overlay = document.getElementById("overlay");
   const content = document.getElementById("reportContent");
 
@@ -446,56 +487,106 @@ function createReport() {
     `;
     overlay.style.display = "block";
     return;
-  } 
-
-  content.innerHTML = ''; 
-
-  if (info && info.image_data) {
-    const imageContainer = document.createElement("div");
-    imageContainer.className = "report-image-container";
-    
-    const img = document.createElement("img");
-    img.src = info.image_data;
-    img.alt = "Screenshot of your final squat rep";
-    
-    imageContainer.appendChild(img);
-    content.appendChild(imageContainer);
   }
 
-  if (info.debug) {
-    const debugSection = document.createElement('div');
-    debugSection.className = 'report-section';
-    debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
-    content.appendChild(debugSection);
-
-    const container = debugSection.querySelector('.debug-container');
-    renderLLMDebug(info.debug, container);
-  } else {
+  if (repCount === 0) {
     content.innerHTML = `
       <div class="report-section">
-        <p style="color: var(--muted);">No AI feedback data available yet. Complete a rep to generate analysis.</p>
+        <p style="color: var(--muted);">Complete some reps first to generate a report!</p>
       </div>
     `;
+    overlay.style.display = "block";
+    return;
   }
 
+  // Show "analyzing" message first
+  content.innerHTML = `
+    <div class="report-section">
+      <p style="font-size: 18px; color: var(--primary);">
+        ⏳ AI is analyzing your form...
+      </p>
+      <p style="color: var(--muted);">
+        Please wait a moment.
+      </p>
+    </div>
+  `;
   overlay.style.display = "block";
+
+  // Send to API NOW (only when button is clicked)
+  sendRepDataToAPI()
+    .then(() => {
+      // Clear and rebuild with results
+      content.innerHTML = '';
+
+      // Add image
+      if (info && info.image_data) {
+        const imageContainer = document.createElement("div");
+        imageContainer.className = "report-image-container";
+        
+        const img = document.createElement("img");
+        img.src = info.image_data;
+        img.alt = "Screenshot of your final squat rep";
+        
+        imageContainer.appendChild(img);
+        content.appendChild(imageContainer);
+      }
+
+      // Add AI feedback
+      if (info && info.debug) {
+        const debugSection = document.createElement('div');
+        debugSection.className = 'report-section';
+        debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
+        content.appendChild(debugSection);
+
+        const container = debugSection.querySelector('.debug-container');
+        renderLLMDebug(info.debug, container);
+      } else if (info) {
+        const basicSection = document.createElement('div');
+        basicSection.className = 'report-section';
+        basicSection.innerHTML = `
+          <h3>Analysis Results</h3>
+          <p><strong>Score:</strong> ${info.score || 'N/A'}/100</p>
+          <p><strong>Corrections:</strong> ${(info.corrections || []).join(', ') || 'None'}</p>
+          <p><strong>Rationale:</strong> ${(info.rationale || []).join(' ') || 'N/A'}</p>
+        `;
+        content.appendChild(basicSection);
+      }
+    })
+    .catch(err => {
+      content.innerHTML = `
+        <div class="report-section">
+          <p style="color: var(--danger);">Failed to analyze: ${err.message || err}</p>
+          <p style="color: var(--muted);">Please try again.</p>
+        </div>
+      `;
+    });
 }
 
+// Close overlay function
 function closeOverlay() {
   document.getElementById("overlay").style.display = "none";
 }
 
+// Event listeners
 const report = document.getElementById("detailedReportBtn");
-report.addEventListener("click", createReport);
+if (report) {
+  report.addEventListener("click", createReport);
+}
 
 const close = document.getElementById('closeOverlay');
-close.addEventListener('click', closeOverlay);
+if (close) {
+  close.addEventListener('click', closeOverlay);
+}
 
-document.getElementById('overlay').addEventListener('click', function(e) {
-  if (e.target === this) {
-    closeOverlay();
-  }
-});
+// Close on overlay background click
+const overlay = document.getElementById('overlay');
+if (overlay) {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeOverlay();
+    }
+  });
+}
 
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {

@@ -209,12 +209,45 @@ async function predictWebcam() {
   }
 }
 
-// Side plank tracking variables
+
+// State variables
+let info = null;
+let lastPlankImageBase64 = null;
+let isAnalyzing = false;
 let isHoldingPlank = false;
 let holdStartTime = null;
 let totalHoldTime = 0;
 let lastPlankSide = null;
-const targetInput = document.getElementById("targetTime");
+
+function updateHoldTimeDisplay(holdTime) {
+  const holdTimeDisplayEl = document.getElementById("holdTimeDisplay");
+  const holdTimeStatEl = document.getElementById("holdTime");
+  
+  const formattedTime = `${holdTime.toFixed(1)}s`;
+  
+  if (holdTimeDisplayEl) {
+    holdTimeDisplayEl.textContent = formattedTime;
+  }
+  
+  if (holdTimeStatEl) {
+    holdTimeStatEl.textContent = formattedTime;
+  }
+
+  // Update report button status
+  const reportBtn = document.getElementById("detailedReportBtn");
+  if (reportBtn) {
+    if (isAnalyzing) {
+      reportBtn.textContent = "⏳ Analyzing...";
+      reportBtn.disabled = true;
+    } else if (info && info.debug) {
+      reportBtn.textContent = "✓ View AI Report";
+      reportBtn.disabled = false;
+    } else {
+      reportBtn.textContent = "Detailed Report";
+      reportBtn.disabled = false;
+    }
+  }
+}
 
 function processAndDisplayPose(landmarks) {
   const leftShoulder = landmarks[11];
@@ -304,24 +337,13 @@ function processAndDisplayPose(landmarks) {
     // Update display
     updateHoldTimeDisplay(totalHoldTime);
     
-    // Check if target reached - capture and send data
-    const targetTime = parseInt(targetInput.value, 10);
-    if (totalHoldTime >= targetTime && !info) {
-      console.log(`🎯 Target reached! Hold: ${totalHoldTime.toFixed(1)}s`);
-      sendPlankDataWithImage(landmarks, totalHoldTime, lastPlankSide);
-    }
+    // Capture image during the hold (but don't send to API yet)
+    capturePlankImage(landmarks, totalHoldTime, supportSide);
     
   } else {
-    // Lost form - only reset if haven't reached target yet
+    // Lost form
     if (isHoldingPlank) {
-      const targetTime = parseInt(targetInput.value, 10);
-      if (totalHoldTime >= targetTime && !info) {
-        // Just reached target and lost form - still send data
-        console.log(`✅ Side plank completed. Total hold: ${totalHoldTime.toFixed(1)}s`);
-        sendPlankDataWithImage(landmarks, totalHoldTime, lastPlankSide);
-      } else if (totalHoldTime < targetTime) {
-        console.log(`❌ Side plank form lost early. Hold: ${totalHoldTime.toFixed(1)}s (target: ${targetTime}s)`);
-      }
+      console.log(`Side plank ended. Total hold: ${totalHoldTime.toFixed(1)}s`);
       isHoldingPlank = false;
       holdStartTime = null;
     }
@@ -338,29 +360,8 @@ function processAndDisplayPose(landmarks) {
   setPoseText(statusText);
 }
 
-function updateHoldTimeDisplay(holdTime) {
-  const holdTimeDisplayEl = document.getElementById("holdTimeDisplay");
-  const holdTimeStatEl = document.getElementById("holdTime");
-  
-  const formattedTime = `${holdTime.toFixed(1)}s`;
-  
-  if (holdTimeDisplayEl) {
-    holdTimeDisplayEl.textContent = formattedTime;
-  } else {
-    console.warn("holdTimeDisplay element not found");
-  }
-  
-  if (holdTimeStatEl) {
-    holdTimeStatEl.textContent = formattedTime;
-  } else {
-    console.warn("holdTime element not found");
-  }
-}
-
-let info;
-let lastPlankImageBase64 = null;
-
-function sendPlankDataWithImage(landmarks, holdDuration, side) {
+// Just capture the image, don't send to API yet
+function capturePlankImage(landmarks, holdDuration, side) {
   const captureCanvas = document.createElement("canvas");
   captureCanvas.width = video.videoWidth;
   captureCanvas.height = video.videoHeight;
@@ -368,53 +369,69 @@ function sendPlankDataWithImage(landmarks, holdDuration, side) {
 
   captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
   lastPlankImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+  
+  // Store the landmarks and metadata for later analysis
+  window.lastPlankData = {
+    landmarks: landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z })),
+    holdDuration: holdDuration,
+    side: side
+  };
+}
 
-  captureCanvas.toBlob(
-    (blob) => {
-      if (!blob) {
-        console.error("Failed to create blob from canvas.");
-        return;
-      }
+// Only send to API when user clicks "Detailed Report"
+function sendPlankDataToAPI() {
+  if (!lastPlankImageBase64 || !window.lastPlankData) {
+    console.error("No plank data captured");
+    return Promise.reject("No data to analyze");
+  }
 
+  isAnalyzing = true;
+  updateHoldTimeDisplay(totalHoldTime);
+
+  // Convert base64 back to blob
+  return fetch(lastPlankImageBase64)
+    .then(res => res.blob())
+    .then(blob => {
       const formData = new FormData();
-      
-      // Use same field name as pushups for compatibility
-      formData.append("repImage", blob, `sideplank_${holdDuration.toFixed(1)}s.jpg`);
-      
-      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
-      formData.append("keypoints", JSON.stringify(keypoints));
-
+      formData.append("repImage", blob, `sideplank_${window.lastPlankData.holdDuration.toFixed(1)}s.jpg`);
+      formData.append("keypoints", JSON.stringify(window.lastPlankData.landmarks));
       formData.append("exercise", "sideplank");
-      formData.append("holdDuration", holdDuration.toFixed(1));
-      formData.append("side", side);
-      // Also send as repCount for backend compatibility (optional)
+      formData.append("holdDuration", window.lastPlankData.holdDuration.toFixed(1));
+      formData.append("side", window.lastPlankData.side);
       formData.append("repCount", 1);
-      
-      console.log('📤 Sending to server:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
-      }
 
-      fetch('/api/infer', { 
+      console.log('📤 Sending to server for analysis...');
+
+      return fetch('/api/infer', { 
         method: 'POST',
         body: formData 
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
-        return res.json();
-      })
-      .then(result => {
-        console.log('✅ Inference result (with image) received:', result);
-        info = {
-            ...result,
-            image_data: lastPlankImageBase64 
-        }
-      })
-      .catch(err => console.error('Error posting data to infer:', err));
-    },
-    "image/jpeg",
-    0.9 
-  );
+      });
+    })
+    .then(res => {
+      if (!res.ok) {
+        throw new Error(`Server responded with status: ${res.status}`);
+      }
+      return res.json();
+    })
+    .then(result => {
+      console.log('✅ Inference result received:', result);
+      
+      info = {
+        ...result,
+        image_data: lastPlankImageBase64 
+      };
+      
+      isAnalyzing = false;
+      updateHoldTimeDisplay(totalHoldTime);
+      
+      return info;
+    })
+    .catch(err => {
+      console.error('❌ Error posting data to infer:', err);
+      isAnalyzing = false;
+      updateHoldTimeDisplay(totalHoldTime);
+      throw err;
+    });
 }
 
 function renderLLMDebug(rawText, container) {
@@ -521,66 +538,111 @@ function renderLLMDebug(rawText, container) {
   }
 }
 
-// Report overlay
 function createReport() {
+  const targetInput = document.getElementById("targetTime");
   const overlay = document.getElementById("overlay");
   const content = document.getElementById("reportContent");
   
-  // Check if elements exist
   if (!overlay || !content) {
     console.error("Overlay elements not found in DOM");
     return;
   }
   
-  const targetTime = parseInt(targetInput.value, 10);
+  const targetTime = parseInt(targetInput?.value || 30, 10);
 
-  // Check if we have feedback data (means we completed a hold)
-  if (!info || !info.image_data) {
+  // Check if we have captured any plank data
+  if (!lastPlankImageBase64 || !window.lastPlankData) {
     content.innerHTML = `
       <div class="report-section">
         <p style="font-size: 18px; color: var(--danger);">
           No plank session data available yet!
         </p>
         <p style="color: var(--muted);">
-          Hold a side plank for at least ${targetTime}s to generate a detailed report.
+          Hold a side plank to capture data, then click this button for analysis.
         </p>
       </div>
     `;
-    overlay.style.display = "block";
+    overlay.style.display = "flex";
     return;
   }
 
-  // We have data - show the report
-  content.innerHTML = ''; 
-
-  const imageContainer = document.createElement("div");
-  imageContainer.className = "report-image-container";
-  
-  const img = document.createElement("img");
-  img.src = info.image_data;
-  img.alt = "Screenshot of your side plank hold";
-  
-  imageContainer.appendChild(img);
-  content.appendChild(imageContainer);
-  
-  if (info.debug) {
-    const debugSection = document.createElement('div');
-    debugSection.className = 'report-section';
-    debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
-    content.appendChild(debugSection);
-
-    const container = debugSection.querySelector('.debug-container');
-    renderLLMDebug(info.debug, container);
-  } else {
-    const noFeedback = document.createElement('div');
-    noFeedback.className = 'report-section';
-    noFeedback.innerHTML = `
-      <p style="color: var(--muted);">AI feedback is being processed...</p>
+  // Check if user held long enough
+  if (totalHoldTime < targetTime) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="font-size: 18px; color: var(--danger);">
+          You held for ${totalHoldTime.toFixed(1)}s but the target is ${targetTime}s!
+        </p>
+        <p style="color: var(--muted);">
+          Keep going to reach your target time.
+        </p>
+      </div>
     `;
-    content.appendChild(noFeedback);
+    overlay.style.display = "flex";
+    return;
   }
 
-  overlay.style.display = "block";
+  // Show "analyzing" message first
+  content.innerHTML = `
+    <div class="report-section">
+      <p style="font-size: 18px; color: var(--primary);">
+        ⏳ AI is analyzing your form...
+      </p>
+      <p style="color: var(--muted);">
+        Please wait a moment.
+      </p>
+    </div>
+  `;
+  overlay.style.display = "flex";
+
+  // Send to API NOW (only when button is clicked)
+  sendPlankDataToAPI()
+    .then(() => {
+      // Clear and rebuild with results
+      content.innerHTML = '';
+
+      // Add image
+      if (info && info.image_data) {
+        const imageContainer = document.createElement("div");
+        imageContainer.className = "report-image-container";
+        
+        const img = document.createElement("img");
+        img.src = info.image_data;
+        img.alt = "Screenshot of your side plank hold";
+        
+        imageContainer.appendChild(img);
+        content.appendChild(imageContainer);
+      }
+
+      // Add AI feedback
+      if (info && info.debug) {
+        const debugSection = document.createElement('div');
+        debugSection.className = 'report-section';
+        debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
+        content.appendChild(debugSection);
+
+        const container = debugSection.querySelector('.debug-container');
+        renderLLMDebug(info.debug, container);
+      } else if (info) {
+        const basicSection = document.createElement('div');
+        basicSection.className = 'report-section';
+        basicSection.innerHTML = `
+          <h3>Analysis Results</h3>
+          <p><strong>Score:</strong> ${info.score || 'N/A'}/100</p>
+          <p><strong>Corrections:</strong> ${(info.corrections || []).join(', ') || 'None'}</p>
+          <p><strong>Rationale:</strong> ${(info.rationale || []).join(' ') || 'N/A'}</p>
+        `;
+        content.appendChild(basicSection);
+      }
+    })
+    .catch(err => {
+      content.innerHTML = `
+        <div class="report-section">
+          <p style="color: var(--danger);">Failed to analyze: ${err.message || err}</p>
+          <p style="color: var(--muted);">Please try again.</p>
+        </div>
+      `;
+    });
 }
 
 function closeOverlay() {
@@ -620,6 +682,7 @@ if (resetBtn) {
     lastPlankSide = null;
     info = null;
     lastPlankImageBase64 = null;
+    window.lastPlankData = null;
     updateHoldTimeDisplay(0);
     console.log("Session reset");
   });

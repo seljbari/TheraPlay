@@ -208,9 +208,12 @@ async function predictWebcam() {
     window.requestAnimationFrame(predictWebcam);
   }
 }
+// Add these state variables near the top with your other state variables
+let info = null;
+let lastRepImageBase64 = null;
+let isAnalyzing = false;
 let lastPose = "up";
 let repCount = 0;
-const targetInput = document.getElementById("targetReps");
 
 // Function to update all rep displays
 function updateRepDisplay() {
@@ -219,6 +222,21 @@ function updateRepDisplay() {
     
     if (repsDisplay) repsDisplay.textContent = repCount;
     if (repsCount) repsCount.textContent = repCount;
+    
+    // Update report button status
+    const reportBtn = document.getElementById("detailedReportBtn");
+    if (reportBtn) {
+        if (isAnalyzing) {
+            reportBtn.textContent = "⏳ Analyzing...";
+            reportBtn.disabled = true;
+        } else if (info && info.debug) {
+            reportBtn.textContent = "✓ View AI Report";
+            reportBtn.disabled = false;
+        } else {
+            reportBtn.textContent = "Detailed Report";
+            reportBtn.disabled = false;
+        }
+    }
 }
 
 function processAndDisplayPose(landmarks) {
@@ -232,7 +250,6 @@ function processAndDisplayPose(landmarks) {
     const rightHip = landmarks[24];
     const leftAnkle = landmarks[27];
     const rightAnkle = landmarks[28];
-    const nose = landmarks[0];
 
     const leftElbowAngle = getAngle(leftShoulder, leftElbow, leftWrist);
     const rightElbowAngle = getAngle(rightShoulder, rightElbow, rightWrist);
@@ -255,6 +272,12 @@ function processAndDisplayPose(landmarks) {
     
     if (isHorizontal && elbowsBent) {
         statusText = "PUSH-UP DOWN!";
+        
+        // Capture image at the bottom position (most important for form check)
+        if (lastPose === "up") {
+            captureRepImage(landmarks);
+        }
+        
         lastPose = "down";
     } else if (isHorizontal && elbowsExtended) {
         statusText = "PUSH-UP UP!";
@@ -263,10 +286,8 @@ function processAndDisplayPose(landmarks) {
             repCount++;
             console.log("✅ Rep completed:", repCount);
             
-            // Update all rep displays immediately
+            // Update rep displays immediately
             updateRepDisplay();
-            
-            sendRepDataWithImage(landmarks);
         }
 
         lastPose = "up";
@@ -279,69 +300,78 @@ function processAndDisplayPose(landmarks) {
     setPoseText(`${statusText} | Reps: ${repCount}`);
 }
 
-let info;
-let lastRepImageBase64 = null;
+// Just capture the image, don't send to API yet
+function captureRepImage(landmarks) {
+    const captureCanvas = document.createElement("canvas");
+    captureCanvas.width = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    const captureCtx = captureCanvas.getContext("2d");
 
-function sendRepDataWithImage(landmarks) {
-  const captureCanvas = document.createElement("canvas");
-  captureCanvas.width = video.videoWidth;
-  captureCanvas.height = video.videoHeight;
-  const captureCtx = captureCanvas.getContext("2d");
-
-  captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-  lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
-
-  captureCanvas.toBlob(
-    (blob) => {
-      if (!blob) {
-        console.error("Failed to create blob from canvas.");
-        return;
-      }
-
-      const formData = new FormData();
-      
-      formData.append("repImage", blob, `rep_${repCount}.jpg`);
-      
-      const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
-      formData.append("keypoints", JSON.stringify(keypoints));
-
-      formData.append("exercise", "pushup");  // ✅ This should be here
-      formData.append("repCount", repCount);
-      
-      // 🔍 ADD THIS DEBUG LOG to verify what's being sent:
-      console.log('📤 Sending to server:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value instanceof Blob ? `Blob (${value.size} bytes)` : value);
-      }
-
-      fetch('/api/infer', { 
-        method: 'POST',
-        body: formData 
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
-        return res.json();
-      })
-      .then(result => {
-        console.log('✅ Inference result (with image) received:', result);
-        info = {
-            ...result,
-            image_data: lastRepImageBase64 
-        }
-      })
-      .catch(err => console.error('Error posting data to infer:', err));
-    },
-    "image/jpeg",
-    0.9 
-  );
+    captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    lastRepImageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+    
+    // Store the landmarks for later analysis
+    window.lastLandmarks = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
 }
+
+// Only send to API when user clicks "Detailed Report"
+function sendRepDataToAPI() {
+    if (!lastRepImageBase64 || !window.lastLandmarks) {
+        console.error("No image or landmarks captured");
+        return Promise.reject("No data to analyze");
+    }
+
+    isAnalyzing = true;
+    updateRepDisplay();
+
+    // Convert base64 back to blob
+    return fetch(lastRepImageBase64)
+        .then(res => res.blob())
+        .then(blob => {
+            const formData = new FormData();
+            formData.append("repImage", blob, `rep_${repCount}.jpg`);
+            formData.append("keypoints", JSON.stringify(window.lastLandmarks));
+            formData.append("exercise", "pushup");
+            formData.append("repCount", repCount);
+
+            console.log('📤 Sending to server for analysis...');
+
+            return fetch('/api/infer', { 
+                method: 'POST',
+                body: formData 
+            });
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`Server responded with status: ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(result => {
+            console.log('✅ Inference result received:', result);
+            
+            info = {
+                ...result,
+                image_data: lastRepImageBase64 
+            };
+            
+            isAnalyzing = false;
+            updateRepDisplay();
+            
+            return info;
+        })
+        .catch(err => {
+            console.error('❌ Error posting data to infer:', err);
+            isAnalyzing = false;
+            updateRepDisplay();
+            throw err;
+        });
+}
+
 function renderLLMDebug(rawText, container) {
   if (!rawText) return;
 
-  // Normalize and split into paragraphs
   const text = String(rawText).trim();
-
-  // Simple markdown-like parsing rules
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   const sectionNodes = [];
@@ -355,43 +385,36 @@ function renderLLMDebug(rawText, container) {
   }
 
   for (let ln of lines) {
-    // Heading heuristics
     if (/^(General Observations|Recommendations|To provide more precise|AI Analysis|Debug Information|General Observations & Potential Issues|Recommendations:)/i.test(ln)) {
       pushCurrent();
       current.title = ln.replace(/:$/,'');
       continue;
     }
 
-    // Numbered list
     if (/^\d+\.\s+/.test(ln)) {
       current.items.push(ln.replace(/^\d+\.\s+/, ''));
       continue;
     }
 
-    // Bullet list
     if (/^[\*\-\u2022]\s+/.test(ln)) {
       current.items.push(ln.replace(/^[\*\-\u2022]\s+/, ''));
       continue;
     }
 
-    // Inline strong/asterisk -> keep as-is and convert later
     current.paragraphs.push(ln);
   }
   pushCurrent();
 
-  // Build DOM
-  container.innerHTML = ''; // clear
+  container.innerHTML = '';
   sectionNodes.forEach((sec, idx) => {
     const section = document.createElement('section');
     section.className = 'debug-block';
 
-    // Title + collapsible for long content
     const titleText = sec.title || (idx === 0 ? 'Summary' : `Section ${idx+1}`);
     const h = document.createElement('h4');
     h.textContent = titleText;
     section.appendChild(h);
 
-    // If many lines, make collapsible
     const shouldCollapse = (sec.paragraphs.join(' ') + sec.items.join(' ')).length > 600;
     const wrapper = shouldCollapse ? document.createElement('details') : document.createElement('div');
     if (shouldCollapse) {
@@ -402,16 +425,13 @@ function renderLLMDebug(rawText, container) {
       wrapper.appendChild(summary);
     }
 
-    // Paragraphs
     sec.paragraphs.forEach(p => {
       const pEl = document.createElement('p');
       pEl.innerHTML = highlightInline(p);
       wrapper.appendChild(pEl);
     });
 
-    // Items (lists)
     if (sec.items.length) {
-      // Decide between ordered/unordered by checking first original pattern (we treated both as items)
       const ul = document.createElement('ul');
       ul.className = 'debug-list';
       sec.items.forEach(it => {
@@ -422,7 +442,6 @@ function renderLLMDebug(rawText, container) {
       wrapper.appendChild(ul);
     }
 
-    // If this is the raw debug payload block, add a raw dump toggle
     if (/Debug Information|Debug Analysis/i.test(titleText)) {
       const rawBtn = document.createElement('button');
       rawBtn.type = 'button';
@@ -439,33 +458,23 @@ function renderLLMDebug(rawText, container) {
       section.appendChild(rawBtn);
     }
 
-    // Append wrapper and section
     section.appendChild(wrapper);
     container.appendChild(section);
   });
 
-  // Inline helper to highlight keypoint arrays and bold markers
   function highlightInline(str) {
-    // Convert **bold** or __bold__
     str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     str = str.replace(/__(.+?)__/g, '<strong>$1</strong>');
-
-    // Convert *italic*
     str = str.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Highlight keypoint arrays like [25,26]
     str = str.replace(/\[(\d+(?:,\s*\d+)*)\]/g, '<span class="kp">[$1]</span>');
-
-    // Emphasize measurements like 45 degree / 45°
     str = str.replace(/(\d{1,3}\s?°|degree[s]?|degrees)/gi, '<span class="meta">$1</span>');
-
-    // Preserve simple dashes or bullets
     return str;
   }
 }
-//report 
+
 function createReport() {
-  const targetReps = parseInt(targetInput.value, 10);
+  const targetInput = document.getElementById("targetReps");
+  const targetReps = parseInt(targetInput?.value || 0, 10);
   const overlay = document.getElementById("overlay");
   const content = document.getElementById("reportContent");
 
@@ -482,13 +491,39 @@ function createReport() {
     `;
     overlay.style.display = "block";
     return;
-  } 
+  }
 
-  // Clear previous content
-  content.innerHTML = ''; 
+  if (repCount === 0) {
+    content.innerHTML = `
+      <div class="report-section">
+        <p style="color: var(--muted);">Complete some reps first to generate a report!</p>
+      </div>
+    `;
+    overlay.style.display = "block";
+    return;
+  }
 
-    // Add image if available
-    if (info && info.image_data) {
+  // Show "analyzing" message first
+  content.innerHTML = `
+    <div class="report-section">
+      <p style="font-size: 18px; color: var(--primary);">
+        ⏳ AI is analyzing your form...
+      </p>
+      <p style="color: var(--muted);">
+        Please wait a moment.
+      </p>
+    </div>
+  `;
+  overlay.style.display = "block";
+
+  // Send to API NOW (only when button is clicked)
+  sendRepDataToAPI()
+    .then(() => {
+      // Clear and rebuild with results
+      content.innerHTML = '';
+
+      // Add image
+      if (info && info.image_data) {
         const imageContainer = document.createElement("div");
         imageContainer.className = "report-image-container";
         
@@ -498,8 +533,10 @@ function createReport() {
         
         imageContainer.appendChild(img);
         content.appendChild(imageContainer);
-    }
-    if (info.debug) {
+      }
+
+      // Add AI feedback
+      if (info && info.debug) {
         const debugSection = document.createElement('div');
         debugSection.className = 'report-section';
         debugSection.innerHTML = `<h3>AI Feedback</h3><div class="debug-container"></div>`;
@@ -507,15 +544,26 @@ function createReport() {
 
         const container = debugSection.querySelector('.debug-container');
         renderLLMDebug(info.debug, container);
-    }else {
-        content.innerHTML = `
-        <div class="report-section">
-            <p style="color: var(--muted);">No AI feedback data available yet. Complete a rep to generate analysis.</p>
-        </div>
+      } else if (info) {
+        const basicSection = document.createElement('div');
+        basicSection.className = 'report-section';
+        basicSection.innerHTML = `
+          <h3>Analysis Results</h3>
+          <p><strong>Score:</strong> ${info.score || 'N/A'}/100</p>
+          <p><strong>Corrections:</strong> ${(info.corrections || []).join(', ') || 'None'}</p>
+          <p><strong>Rationale:</strong> ${(info.rationale || []).join(' ') || 'N/A'}</p>
         `;
-    }
-
-  overlay.style.display = "block";
+        content.appendChild(basicSection);
+      }
+    })
+    .catch(err => {
+      content.innerHTML = `
+        <div class="report-section">
+          <p style="color: var(--danger);">Failed to analyze: ${err.message || err}</p>
+          <p style="color: var(--muted);">Please try again.</p>
+        </div>
+      `;
+    });
 }
 
 // Close overlay function
@@ -525,17 +573,24 @@ function closeOverlay() {
 
 // Event listeners
 const report = document.getElementById("detailedReportBtn");
-report.addEventListener("click", createReport);
+if (report) {
+  report.addEventListener("click", createReport);
+}
 
 const close = document.getElementById('closeOverlay');
-close.addEventListener('click', closeOverlay);
+if (close) {
+  close.addEventListener('click', closeOverlay);
+}
 
-// Also close on overlay background click
-document.getElementById('overlay').addEventListener('click', function(e) {
-  if (e.target === this) {
-    closeOverlay();
-  }
-});
+// Close on overlay background click
+const overlay = document.getElementById('overlay');
+if (overlay) {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeOverlay();
+    }
+  });
+}
 
 const imageEl = document.querySelector(".detectOnClick img");
 if (imageEl) {
