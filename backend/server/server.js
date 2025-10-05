@@ -63,6 +63,26 @@ app.get('/squats', (req, res) => {
   });
 });
 
+app.get('/flappyBirdGame', (req, res) => {
+  const pushupsPage = path.join(frontendRoot, 'flappyBirdGame', 'flappy-face.html');
+  res.sendFile(pushupsPage, (err) => {
+    if (err) {
+      console.error('Error sending pushups page:', err);
+      res.status(500).send('Could not load pushups page');
+    }
+  });
+});
+
+app.get('/towergame', (req, res) => {
+  const pushupsPage = path.join(frontendRoot, 'towergame', 'towergame.html');
+  res.sendFile(pushupsPage, (err) => {
+    if (err) {
+      console.error('Error sending pushups page:', err);
+      res.status(500).send('Could not load pushups page');
+    }
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server listening at http://localhost:${PORT}`);
